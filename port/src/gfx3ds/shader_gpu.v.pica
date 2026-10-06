@@ -1,0 +1,135 @@
+; PORT (2026-10-01): GPU vertex path (gfx_pc.c gpu_vtx=1). Vertices arrive in MODEL space with the index of
+; their matrix in a palette; the CPU no longer transforms, clips or splits them (that was ~40% of the Old
+; 3DS frame: hardware v23 profile). Same model as RT64 (Zelda64Recomp's renderer), which moved all RSP
+; vertex work to the GPU to remove the CPU bottleneck at high frame rates.
+;
+; Each palette entry is 4 rows that give the FINAL output directly (gfx_pc.c gpu_slot_rows): the portrait
+; target's axes (y, -x), the N64 half-pixel offset and aspect squeeze, z mapped as -(z + w) / 2 - exactly
+; what pack_vertex wrote on the CPU path. Fog and the stereo offset, which need the transformed z/w, are
+; computed here as gfx_sp_vertex / stereo_offset did.
+
+; 18 matrices x 4 rows (shared with shader_raw.v.pica, which needs the rest of the 96 registers)
+.fvec pal[72]
+; eye, remap: as shader.v.pica
+.fvec eye
+.fvec remap
+; fogp: x = fog multiplier on out.z/w, y = fog offset (N64 fog_mul/fog_offset folded for z' = -(z+w)/2),
+;       z = fog on (0/1), w = 1/255
+.fvec fogp
+; stp: x = stereo convergence c (0 = 3D off), y = (1 - t): skinned vertices move back toward the previous
+;      frame's position in 60 fps in-between frames, z = screen-linear mode (0/1, see the end),
+;      w = 0.0005 (|w - 1| below = a flat 2D layer)
+.fvec stp
+
+.entry gpu_main
+.constf cst(4.0, 1.0, 0.0, 255.0)
+; (y, z unused here: the same values as shader_raw.v.pica's rc2, so both programs' constants are identical and stay
+; on the GPU when the renderer switches between them - c3d_fast.c)
+.constf cst2(0.001, 128.0, 256.0, 0.0)
+
+.out outpos position
+.out outtc0 texcoord0.xy
+.out -      texcoord0w outtc0.p
+.out outtc1 texcoord1
+.out outclr color
+
+.alias inpos v0
+.alias intex v1
+.alias inclr v2
+.alias intex1 v3
+.alias inidx v4
+.alias indpos v5
+
+.proc gpu_main
+	; position: model space (w = 1) + the skinned delta toward the previous frame; or, for the pieces
+	; of triangles the CPU split/clipped N64-style, clip space with the identity palette entry
+	mov r0, inpos
+	mov r5, stp
+	mul r1.xyz, indpos.xyz, r5.yyy
+	add r0.xyz, r0.xyz, r1.xyz
+
+	; palette entry: rows idx * 4 .. idx * 4 + 3
+	mul r1.x, cst.x, inidx.x
+	mova a0.x, r1.x
+	dp4 r2.x, pal[a0.x], r0
+	dp4 r2.y, pal[a0.x+1], r0
+	dp4 r2.z, pal[a0.x+2], r0
+	dp4 r2.w, pal[a0.x+3], r0
+	; PORT (2026-10-01): the N64 (NoN microcode) does not clip at the near plane; the PICA would. A vertex in
+	; front of it gets z on the plane (out.z = -(z + w) / 2 <= 0), as pvtx_clamp_near does on the CPU. Pieces of
+	; triangles cut on the CPU are drawn in model space too (gfx_pc.c gpu_pack_clip_tri) and need this.
+	; remap.z = that limit: 0 (N64), or huge (the Old 3DS speed rules: the PICA clips at the near plane itself)
+	mov r15, remap
+	min r2.z, r15.z, r2.z
+
+	; shade (0..255 bytes)
+	mov r6, fogp
+	mul r3, inclr, r6.wwww
+
+	; fog (gfx_sp_vertex): a = clamp(z / w * mul + off, 0, 255) / 255 replaces shade alpha when on
+	mov r7, cst2
+	max r4.x, r2.w, r7.x
+	rcp r4.x, r4.x
+	mul r4.x, r2.z, r4.x
+	mul r4.x, r4.x, r6.x
+	add r4.x, r4.x, r6.y
+	max r4.x, cst.z, r4.x
+	min r4.x, cst.w, r4.x
+	mul r4.x, r4.x, r6.w
+	; r3.w = shade.a + fogOn * (1 - precomputed) * (fog - shade.a); indpos.w = 1: the CPU already put
+	; the N64 fog factor in shade alpha (split pieces: interpolated screen-linearly, as the RDP does)
+	add r4.y, r4.x, -r3.w
+	mul r4.y, r4.y, r6.z
+	add r7.y, cst.y, -indpos.w
+	mul r4.y, r4.y, r7.y
+	add r3.w, r3.w, r4.y
+
+	; stereo offset (stereo_offset): s = w - c, 0 for flat 2D layers (w exactly 1) and with 3D off
+	add r4.z, r2.w, -r5.x
+	add r4.w, -cst.y, r2.w
+	max r8.x, r4.w, -r4.w
+	slt r8.y, r5.w, r8.x
+	mul r4.z, r4.z, r8.y
+
+	; per-eye shift / zoom / viewport remap on the screen's horizontal axis (out.y): as shader.v.pica
+	mov r1, eye
+	mul r8.x, r1.z, r2.y
+	add r2.y, r2.y, r8.x
+	mul r9.x, r1.x, r4.z
+	mul r9.y, r1.w, r2.w
+	add r9.x, r9.x, r9.y
+	add r2.y, r2.y, r9.x
+	mov r10, remap
+	mul r11.x, r10.x, r2.y
+	mul r11.y, r10.y, r2.w
+	add r2.y, r11.x, r11.y
+
+	; PORT (2026-10-01): screen-linear mode (stp.z = 1). The RDP interpolates shade and fog linearly on
+	; the screen and only the texture coordinates with perspective; the PICA interpolates everything with
+	; perspective. Dividing the position by w here (w = 1 out) makes every attribute screen-linear; the
+	; texture coordinates of unit 0 stay perspective-correct through projective texturing (unit 0 in
+	; GPU_TEX_PROJECTION mode divides s/q, t/q per pixel). Unit 1 has no projective mode: draws using it
+	; keep stp.z = 0 (and the CPU split). With stp.z = 0: q = 1, the same as plain 2D texturing.
+	; q = 1 + lin * (1 / w - 1); pos.xyz *= q; pos.w += lin * (1 - w)
+	rcp r12.x, r2.w
+	; one Newton step: rcp is approximate and z' = z / w is the depth (r = r * (2 - w * r))
+	mul r12.w, r2.w, r12.x
+	add r12.w, -cst.y, r12.w
+	mul r12.w, r12.w, r12.x
+	add r12.x, r12.x, -r12.w
+	add r12.y, -cst.y, r12.x
+	mul r12.y, r12.y, r5.z
+	add r12.y, cst.y, r12.y
+	mul r2.xyz, r2.xyz, r12.yyy
+	add r12.z, cst.y, -r2.w
+	mul r12.z, r12.z, r5.z
+	add r2.w, r2.w, r12.z
+	mul r13.xy, intex.xy, r12.yy
+	mov r13.z, r12.y
+
+	mov outpos, r2
+	mov outtc0, r13
+	mov outtc1, intex1
+	mov outclr, r3
+	end
+.end

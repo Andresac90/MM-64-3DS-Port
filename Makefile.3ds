@@ -1,0 +1,232 @@
+# ============================================================================
+# Makefile.3ds — devkitARM build for the Majora's Mask -> Nintendo 3DS port (from the OoT 3DS port's).
+#
+# Reconstructed 2026-09-16 (originals lost in the Windows->Mac move). The two
+# compile "worlds" below were validated empirically against devkitARM gcc 16:
+#   * GAME world  : decomp C. -nostdinc + the decomp's own include/libc. This is
+#                   all of src/**, the port SHIMS (ultra_shims*, *_shim, ...),
+#                   src_gen/**, and the extracted asset .c files.
+#   * DEVKIT world: platform backends that use <3ds.h>/<citro3d.h> + newlib.
+#                   MUST NOT put include/libc on the path (it shadows newlib's
+#                   <stdio.h>/<string.h> -> "unknown type uint8_t / __gnuc_va_list").
+#
+# Prereqs: `export DEVKITPRO=/opt/devkitpro`; extracted assets (see
+# docs/BUILDING_3DS.md). Usage: `make -f Makefile.3ds [cci|cia|clean]`.
+# ============================================================================
+
+ifeq ($(strip $(DEVKITPRO)),)
+$(error DEVKITPRO is not set. Run: export DEVKITPRO=/opt/devkitpro)
+endif
+DEVKITARM ?= $(DEVKITPRO)/devkitARM
+
+PREFIX  := $(DEVKITARM)/bin/arm-none-eabi-
+CC      := $(PREFIX)gcc
+LD      := $(PREFIX)gcc
+OBJCOPY := $(PREFIX)objcopy
+NM      := $(PREFIX)nm
+PICASSO := $(DEVKITPRO)/tools/bin/picasso
+3DSXTOOL:= $(DEVKITPRO)/tools/bin/3dsxtool
+MAKEROM ?= $(shell command -v makerom 2>/dev/null || echo $(DEVKITPRO)/tools/bin/makerom)
+SMDHTOOL:= $(DEVKITPRO)/tools/bin/smdhtool
+CTRULIB := $(DEVKITPRO)/libctru
+PORTLIBS:= $(DEVKITPRO)/portlibs/3ds
+
+TARGET  := mm
+BUILD   := build/3ds
+ELF     := $(BUILD)/$(TARGET).elf
+VERSION := n64-us
+
+ARCH    := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
+OPT     := -O2 -fno-strict-aliasing -funsigned-char
+WARN    := -Wno-implicit-function-declaration -Wno-builtin-declaration-mismatch -Wno-multichar
+GCC_INC := $(shell $(CC) $(ARCH) -print-file-name=include)
+
+# Asset include roots. Files are included as "assets/...", so the COMMITTED tree
+# resolves via -I. (repo root) and the machine-extracted via -Iextracted. -I. must
+# precede -Iextracted so hand-maintained headers (icon_item_static.h with the
+# PAUSE_MENU/_SIZE macros) win; -Ibuild is first for the generated .inc.c.
+GEN_INC := -Ibuild/$(VERSION) -I. -Iextracted/$(VERSION)
+
+# ---- GAME world (decomp C, freestanding) ------------------------------------
+GAME_DEFS := -D__3DS__ -DCOMPILER_GCC -DNON_MATCHING -DAVOID_UB -DMM_VERSION=N64_US \
+             -DF3DEX_GBI_2 -DF3DEX_GBI_PL -DGBI_DOWHILE -D_LANGUAGE_C -DMML_VERSION=MML_VERSION_MM \
+             -D_MIPS_SZINT=32 -D_MIPS_SZLONG=32 -D_MIPS_SZPTR=32
+# port/include and port/src FIRST so the port's header overrides win (segment_symbols.h,
+# segmented_address.h, ...) over the decomp originals — matches the old PC Makefile.
+GAME_INC := -nostdinc -isystem $(GCC_INC) -Iport/include -Iport/src -Iport/src/gfx \
+            -Iinclude -Iinclude/libc -Iinclude/audio -Isrc $(GEN_INC)
+# GAME_EXTRA: opt-in game-side test hooks, e.g. GAME_EXTRA=-DPORT_START_ENTRANCE=0xB7 (boot into the Bazaar)
+GAME_CFLAGS := $(ARCH) -std=gnu90 $(OPT) $(WARN) $(GAME_DEFS) $(GAME_INC) $(GAME_EXTRA)
+
+# ---- DEVKIT world (platform backends, newlib + libctru) ---------------------
+# TARGET_N3DS gates the citro3d/gfx_3ds backend bodies (sm64-port convention) — without
+# it gfx_3ds.c/gfx_citro3d.c compile to empty and the renderer symbols vanish.
+PORT_DEFS := -D__3DS__ -DTARGET_N3DS -DARM11 -D_3DS -DF3DEX_GBI_2 -DF3DEX_GBI_PL -DGBI_DOWHILE -D_LANGUAGE_C \
+             -DMM_VERSION=N64_US
+PORT_INC := -isystem $(GCC_INC) -Iport/include -Iport/src -Iport/src/gfx \
+            -Iport/src/gfx3ds -Iinclude -Isrc $(GEN_INC) \
+            -I$(CTRULIB)/include -I$(PORTLIBS)/include
+# PORT_EXTRA: opt-in debug tools, e.g. `make -f Makefile.3ds cci PORT_EXTRA=-DPORT_TEXDUMP`
+PORT_CFLAGS := $(ARCH) -std=gnu11 $(OPT) $(WARN) $(PORT_DEFS) $(PORT_INC) $(PORT_EXTRA)
+
+# port/rom_symbols.ld defines the N64 VROM segment address symbols (_xxxSegmentRomStart/End,
+# 16k symbols) the game references for DMA. It's symbol-only (no SECTIONS), so it augments
+# the 3dsx.specs linker script.
+LDFLAGS := $(ARCH) -specs=3dsx.specs -g $(OPT) -L$(CTRULIB)/lib -L$(PORTLIBS)/lib \
+           -Wl,-T,port/rom_symbols.ld -Wl,-T,port/audio_syms_stub.ld \
+           -Wl,-T,port/port_stubs.ld
+LIBS    := -lcitro3d -lctru -lm
+
+# ============================================================================
+# SOURCES
+# ============================================================================
+# GAME decomp = full tree minus what the port shims out (tune at first link).
+# Exclude GC/iQue platform variants (this is a PLATFORM_N64 build), the GC fault
+# screen and the build stamp.
+GAME_EXCLUDE := \
+  src/boot/build.c src/code/z_sram_JPN.c \
+  src/boot/z_std_dma.c src/boot/libc64/malloc.c src/boot/libc64/sleep.c \
+  src/code/z_kaleido_manager.c src/code/sched.c src/boot/libu64/loadfragment.c src/boot/libu64/loadfragment2.c \
+  src/code/sys_cfb.c src/code/z_nulltask.c
+# Game + engine + utility libraries. Port shims REPLACE src/libultra/os|io (so those are NOT compiled);
+# src/libultra/gu (pure math) IS.
+GAME_DECOMP := $(filter-out $(GAME_EXCLUDE), \
+    $(shell find src/code src/audio src/overlays src/boot src/buffers \
+                 -name '*.c' ! -name '*.inc.c')) \
+    $(wildcard src/libultra/gu/*.c)
+
+# PORT shims + generated tables compile in the GAME world.
+PORT_GAME_SRCS := \
+  port/src/ultra_shims.c port/src/ultra_shims2.c port/src/ultra_shims3.c \
+  port/src/dma_shim.c port/src/sched_shim.c port/src/arena_shim.c \
+  port/src/rdram_shim.c port/src/boot_globals.c port/src/sleep_shim.c \
+  port/src/syscfb_shim.c port/src/runtime_shim.c port/src/loadfragment_shim.c \
+  port/src/kaleido_shim.c port/src/audio_microcode.c port/src/misc_freestanding.c \
+  port/src/port_link_stubs.c port/src/kanread_port.c \
+  $(wildcard port/src_gen/*.c)
+
+# PORT platform backends compile in the DEVKIT world.
+DEVKIT_SRCS := \
+  port/src/3ds_main.c port/src/3ds_compat.c port/src/audio_3ds.c port/src/jpeg_port.c port/src/statedump.c port/src/zbuffer_port.c port/src/overlay_statics.c \
+  port/src/gfx/gfx_pc.c port/src/gfx3ds/gfx_3ds.c port/src/gfx3ds/gfx_citro3d.c port/src/gfx3ds/c3d_fast.c
+
+# native little-endian assets (generated; from port/asset_srcs.mk -> $(ASSET_SRCS))
+# ASSET_BUILDDIR = generated audio (soundfonts/…); ASSET_EXTRACTED = machine-extracted
+# asset .c; committed asset .c appear as bare "assets/…" paths. NOTE: no trailing
+# inline comments on these assignments — trailing spaces would corrupt the paths.
+ASSET_BUILDDIR  ?= build/$(VERSION)
+ASSET_EXTRACTED ?= extracted/$(VERSION)
+-include port/asset_srcs.mk
+# gameplay_keep is provided by port/src_gen/gameplay_keep_blob.c (the manual blob,
+# gVromMap index 0); drop the committed gameplay_keep asset .c to avoid dup symbols.
+ASSET_SRCS := $(filter-out $(wildcard assets/objects/gameplay_keep/*.c),$(ASSET_SRCS))
+
+GAME_SRCS  := $(GAME_DECOMP) $(PORT_GAME_SRCS)
+GAME_OBJS  := $(addprefix $(BUILD)/,$(GAME_SRCS:.c=.o))
+DEVKIT_OBJS:= $(addprefix $(BUILD)/,$(DEVKIT_SRCS:.c=.o))
+ASSET_OBJS := $(addprefix $(BUILD)/,$(ASSET_SRCS:.c=.o))
+SHADER_OBJ := $(BUILD)/shader_shbin.o
+VERSION_OBJ:= $(BUILD)/port_version.o
+OBJS       := $(GAME_OBJS) $(DEVKIT_OBJS) $(ASSET_OBJS) $(SHADER_OBJ) $(VERSION_OBJ)
+
+# ============================================================================
+# RULES  (per-object flags via target-specific CFLAGS)
+# ============================================================================
+.PHONY: all elf dsx cci cia clean compile code FORCE
+# The port targets a fixed-layout CCI (.3ds via makerom), NOT relocatable .3dsx (which
+# 3dsxtool rejects here and Azahar won't load). Default build = the linked ELF; package
+# with `cci` (needs makerom) for Azahar / hardware.
+all: $(ELF)
+elf: $(ELF)
+dsx: $(BUILD)/$(TARGET).3dsx
+cci: $(BUILD)/$(TARGET).3ds
+cia: $(BUILD)/$(TARGET).cia
+compile: $(OBJS)                                       # compile everything, skip link
+code: $(GAME_OBJS) $(DEVKIT_OBJS) $(SHADER_OBJ)        # compile code only (no assets) — shakeout
+
+# -fno-toplevel-reorder: keep static data in declaration order, as IDO does. Original out-of-bounds reads
+# then see the same neighbours as on N64 (e.g. EnHeishi1's courtyard guards read sAnimParamsInit[type>3]
+# into sRupeePositions; with GCC's reordering they read different values - found by tools/statediff).
+$(GAME_OBJS): CC_FLAGS := $(GAME_CFLAGS) -fno-toplevel-reorder
+# PORT (2026-09-24): every native asset TU must keep its ROM (declaration) layout, because the
+# DMA shim serves ROM reads of natively-linked segments as native_base + rom_offset (gVromMap).
+# With GCC's default toplevel reordering, icon_item_static came out in REVERSE order (85/86 icons
+# misplaced -> garbage C-button icons). Same flags as the gameplay_keep blob below: keep
+# declaration order, and -Dconst= keeps const and non-const data in one contiguous .data run.
+# -fno-zero-initialized-in-bss: all-zero arrays (e.g. *_zeros_*, empty cam lists) otherwise go to
+# .bss, splitting a segment in two (tools/layout_audit.py flagged 138 segments before these flags).
+$(ASSET_OBJS): CC_FLAGS := $(GAME_CFLAGS) -fno-toplevel-reorder -fno-zero-initialized-in-bss -Dconst=
+$(DEVKIT_OBJS):             CC_FLAGS := $(PORT_CFLAGS)
+# PORT PERF (2026-09-30): the per-frame hot paths (renderer, audio microcode) at -O3 -ffast-math, like the
+# sm64 3DS port's Old-3DS speed-up (RetroGamer02/sm64 "Speed boost"). Game logic keeps -O2 without
+# fast-math so its float results stay those of the N64 code.
+HOT_OBJS := $(BUILD)/port/src/gfx/gfx_pc.o $(BUILD)/port/src/gfx3ds/gfx_citro3d.o \
+            $(BUILD)/port/src/gfx3ds/gfx_3ds.o $(BUILD)/port/src/audio_microcode.o $(BUILD)/port/src/gfx3ds/c3d_fast.o
+$(HOT_OBJS): CC_FLAGS += -O3 -ffast-math
+# gameplay_keep blob must be a VROM-exact contiguous native LE blob (see its header):
+# -O0 keeps order, -fno-toplevel-reorder keeps declaration order, -Dconst= forces data
+# into .data so gpk_blob.ld can gather it with __gpk_blob_start/_end markers.
+$(BUILD)/port/src_gen/gameplay_keep_blob.o: CC_FLAGS := $(GAME_CFLAGS) -O0 -fno-toplevel-reorder -Dconst=
+
+$(BUILD)/%.o: %.c
+	@mkdir -p $(dir $@)
+	@$(CC) $(CC_FLAGS) -MMD -MP -c -o $@ $< || (echo "FAIL: $<" && false)
+	@# overlay objects: own .data/.bss sections so overlay_statics.c can reset them on (re)load, like N64
+	@case "$@" in $(BUILD)/src/overlays/*/ovl_*/*) ovl=$$(basename $$(dirname $@)); \
+		$(OBJCOPY) --rename-section .data=ovld_$$ovl --rename-section .bss=ovlb_$$ovl $@ ;; esac
+
+# PICA200 vertex shader -> shader_shbin[] object
+$(BUILD)/shader.shbin: port/src/gfx3ds/shader.v.pica port/src/gfx3ds/shader_gpu.v.pica port/src/gfx3ds/shader_raw.v.pica
+	@mkdir -p $(dir $@)
+	$(PICASSO) -o $@ port/src/gfx3ds/shader.v.pica port/src/gfx3ds/shader_gpu.v.pica port/src/gfx3ds/shader_raw.v.pica
+# objcopy -I binary names symbols from the input FILENAME; we cd in first so the input is
+# "shader.shbin" -> _binary_shader_shbin_{start,end,size}. Rename to what the code expects.
+$(SHADER_OBJ): $(BUILD)/shader.shbin
+	@cd $(dir $<) && $(PREFIX)objcopy -I binary -O elf32-littlearm -B arm \
+	  --redefine-sym _binary_shader_shbin_start=shader_shbin \
+	  --redefine-sym _binary_shader_shbin_size=shader_shbin_size \
+	  --redefine-sym _binary_shader_shbin_end=shader_shbin_end \
+	  --rename-section .data=.rodata,alloc,load,readonly,data,contents \
+	  shader.shbin $(abspath $@)
+
+$(ELF): $(OBJS)
+	@mkdir -p $(dir $@)
+	$(LD) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
+
+$(BUILD)/$(TARGET).3dsx: $(ELF) ; $(3DSXTOOL) $< $@
+# Version shown in boot.log: `git describe`, or port/VERSION in a source download without .git. The file is
+# rewritten only when the text changes, so an unchanged tree relinks nothing.
+PORT_VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || cat port/VERSION)
+$(BUILD)/port_version.c: FORCE
+	@mkdir -p $(dir $@)
+	@echo 'const char gPortVersion[] = "$(PORT_VERSION)";' > $@.tmp
+	@cmp -s $@.tmp $@ || mv $@.tmp $@; rm -f $@.tmp
+$(VERSION_OBJ): $(BUILD)/port_version.c ; @$(CC) $(PORT_CFLAGS) -c -o $@ $<
+
+# HOME Menu icon: port/icon_local.png when present (Navi or Link rendered from your own game data by
+# tools/make_navi_icon.py / make_link_banner.py --icon, never committed), else the original artwork port/icon.png
+# (tools/make_icon.py)
+ICON_PNG := $(if $(wildcard port/icon_local.png),port/icon_local.png,port/icon.png)
+$(BUILD)/$(TARGET).smdh: $(ICON_PNG)
+	@mkdir -p $(dir $@)
+	$(SMDHTOOL) --create "The Legend of Zelda: Majora's Mask N64 3DS Port" "The Legend of Zelda: Majora's Mask N64 3DS Port" "Fan project" $< $@
+
+# HOME Menu banner (flat pictures: the stereoscopic 3D banner still crashes the real HOME Menu): port/banner_local.bnr
+# when present (Link, tools/make_link_banner.py, never committed), else the committed original artwork port/banner.bnr
+# (tools/make_banner.sh; bannertool not needed to build)
+BANNER := $(if $(wildcard port/banner_local.bnr),port/banner_local.bnr,port/banner.bnr)
+# Title version in the CIA (1.0.0): a new version makes FBI install it as an update and the HOME Menu re-read the
+# icon and banner (it keeps them cached per title version)
+TITLE_VER_MAJOR := 1
+TITLE_VER_MINOR := 0
+TITLE_VER_MICRO := 0
+
+$(BUILD)/$(TARGET).3ds:  $(ELF) port/mm.rsf $(BUILD)/$(TARGET).smdh $(BANNER)
+	$(MAKEROM) -f cci -o $@ -rsf port/mm.rsf -target t -exefslogo -elf $< -icon $(BUILD)/$(TARGET).smdh -banner $(BANNER)
+$(BUILD)/$(TARGET).cia:  $(ELF) port/mm.rsf $(BUILD)/$(TARGET).smdh $(BANNER)
+	$(MAKEROM) -f cia -o $@ -rsf port/mm.rsf -target t -exefslogo -elf $< -icon $(BUILD)/$(TARGET).smdh -banner $(BANNER) \
+		-major $(TITLE_VER_MAJOR) -minor $(TITLE_VER_MINOR) -micro $(TITLE_VER_MICRO)
+
+clean: ; rm -rf $(BUILD)
+
+-include $(OBJS:.o=.d)

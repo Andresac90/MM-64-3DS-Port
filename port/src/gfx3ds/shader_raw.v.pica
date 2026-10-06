@@ -1,0 +1,153 @@
+; PORT PERF (2026-10-04): raw vertex path (gfx_pc.c gPortRawVtx). The vertices are the game's own 16-byte N64
+; vertices, copied as they are (the flag field carries the palette index): s16 position, s16 texture coordinates,
+; u8 colour or s8 normal + alpha. Everything the RSP did per vertex runs here - the matrix (palette, as in
+; shader_gpu.v.pica), the directional lights, the texture coordinate scale and offset, fog - so the CPU does no
+; per-vertex work at all (the same design as the Super Mario 64 3DS port's "Emu64", which reaches the N64's speed on
+; an Old 3DS). Not here: the N64's screen-linear shade/fog interpolation (the CPU split), texture coordinate
+; generation and skinned 60 fps deltas: those loads stay on shader_gpu.v.pica.
+;
+; Uniforms are shared with shader_gpu.v.pica by name (picasso allocates them once for the whole binary).
+
+.fvec eye
+.fvec remap
+.fvec pal[72]
+.fvec fogp
+.fvec stp
+; texture coordinates: uv0 = tc * uvc0.xy + uvc0.zw, uv1 = tc * uvc1.xy + uvc1.zw (scale, tile offset, 1 / size, the
+; texture's pool scale and the flipped t folded together on the CPU)
+.fvec uvc0
+.fvec uvc1
+; lit: x = 1 when G_LIGHTING (the vertex bytes are a normal), else 0; y = 1: camera-space lighting (ldir in camera
+; space; z = -1 / (aspect * P[0][0]), w = 1 / P[1][1] recover the camera's x and y from the palette rows)
+.fvec lit
+; lamb: ambient colour (0..1); ldir: light directions / 127 (model or camera space, lit.y); lcol: their colours (0..1)
+.fvec lamb
+.fvec ldir[4]
+.fvec lcol[4]
+
+.entry raw_main
+.constf rc1(4.0, 1.0, 0.0, 255.0)
+.constf rc2(0.001, 128.0, 256.0, 0.0)
+
+.out outpos position
+.out outtc0 texcoord0.xy
+.out -      texcoord0w outtc0.p
+.out outtc1 texcoord1
+.out outclr color
+
+.alias inpos v0
+.alias intc v1
+.alias incn v2
+
+.proc raw_main
+	; position: model space, w = 1; palette entry = the vertex's w (the N64 flag field) * 4 rows
+	mov r0, inpos
+	mov r0.w, rc1.y
+	mul r1.x, rc1.x, inpos.w
+	mova a0.x, r1.x
+	dp4 r2.x, pal[a0.x], r0
+	dp4 r2.y, pal[a0.x+1], r0
+	dp4 r2.z, pal[a0.x+2], r0
+	dp4 r2.w, pal[a0.x+3], r0
+	; the N64 (NoN microcode) does not clip at the near plane: a vertex in front of it gets z on the plane.
+	; remap.z = that limit: 0 (N64), or huge (the Old 3DS speed rules: the PICA clips at the near plane itself)
+	mov r15, remap
+	min r2.z, r15.z, r2.z
+
+	; unlit: the colour bytes / 255
+	mov r6, fogp
+	mul r3, r6.wwww, incn
+
+	; lit: the bytes are a signed normal (n = b - 256 * (b >= 128)); colour = ambient + sum max(0, n . L) * C,
+	; clamped to 1 (the RSP's directional lighting)
+	mov r7, rc2
+	sge r4.xyz, incn.xyz, r7.yyy
+	mul r4.xyz, r4.xyz, r7.zzz
+	add r4.xyz, incn.xyz, -r4.xyz
+	; PORT PERF (2026-10-05): camera-space lighting (lit.y = 1). The normal goes to camera space through the vertex's
+	; palette entry - its rows are y', -x', z', w of P x MV: x_cam = row1 . n * lit.z, y_cam = row0 . n * lit.w,
+	; z_cam = -(row3 . n) - divided by the matrix's scale |row3.xyz|, which is the N64's normalisation of the
+	; model-space light direction (uniform scale; gfx_pc.c keeps other matrices on model-space light sets). One light
+	; set then serves every limb of a model (the N64's per-matrix light transform split draws and lit limb seams on the
+	; CPU).
+	mov r14, lit
+	dp3 r13.x, pal[a0.x+1], r4
+	dp3 r13.y, pal[a0.x], r4
+	dp3 r13.z, pal[a0.x+3], r4
+	mul r13.x, r13.x, r14.z
+	mul r13.y, r13.y, r14.w
+	mov r12, pal[a0.x+3]
+	dp3 r12.x, r12, r12
+	rsq r12.x, r12.x
+	mul r13.xy, r13.xy, r12.xx
+	mul r13.z, -r13.z, r12.x
+	add r13.xyz, r13.xyz, -r4.xyz
+	mul r13.xyz, r14.yyy, r13.xyz
+	add r4.xyz, r4.xyz, r13.xyz
+	dp3 r5.x, ldir[0], r4
+	dp3 r5.y, ldir[1], r4
+	dp3 r5.z, ldir[2], r4
+	dp3 r5.w, ldir[3], r4
+	max r5, rc1.zzzz, r5
+	mov r8, lamb
+	mul r9, lcol[0], r5.xxxx
+	add r8, r8, r9
+	mul r9, lcol[1], r5.yyyy
+	add r8, r8, r9
+	mul r9, lcol[2], r5.zzzz
+	add r8, r8, r9
+	mul r9, lcol[3], r5.wwww
+	add r8, r8, r9
+	min r8, rc1.yyyy, r8
+	add r9.xyz, r8.xyz, -r3.xyz
+	mul r9.xyz, lit.xxx, r9.xyz
+	add r3.xyz, r3.xyz, r9.xyz
+
+	; fog (gfx_sp_vertex): a = clamp(z / w * mul + off, 0, 255) / 255 replaces shade alpha when on
+	max r4.x, r2.w, r7.x
+	rcp r4.x, r4.x
+	mul r4.x, r2.z, r4.x
+	mul r4.x, r4.x, r6.x
+	add r4.x, r4.x, r6.y
+	max r4.x, rc1.z, r4.x
+	min r4.x, rc1.w, r4.x
+	mul r4.x, r4.x, r6.w
+	add r4.y, r4.x, -r3.w
+	mul r4.y, r4.y, r6.z
+	add r3.w, r3.w, r4.y
+
+	; texture coordinates
+	mov r10, intc
+	mul r11.xy, uvc0.xy, r10.xy
+	add r11.xy, uvc0.zw, r11.xy
+	mov r11.z, rc1.y
+	mul r12.xy, uvc1.xy, r10.xy
+	add r12.xy, uvc1.zw, r12.xy
+
+	; stereo offset (stereo_offset): s = w - c, 0 for flat 2D layers (w exactly 1) and with 3D off
+	mov r5, stp
+	add r4.z, r2.w, -r5.x
+	add r4.w, -rc1.y, r2.w
+	max r13.x, r4.w, -r4.w
+	slt r13.y, r5.w, r13.x
+	mul r4.z, r4.z, r13.y
+
+	; per-eye shift / zoom / viewport remap on the screen's horizontal axis (out.y): as shader.v.pica
+	mov r1, eye
+	mul r13.x, r1.z, r2.y
+	add r2.y, r2.y, r13.x
+	mul r14.x, r1.x, r4.z
+	mul r14.y, r1.w, r2.w
+	add r14.x, r14.x, r14.y
+	add r2.y, r2.y, r14.x
+	mov r1, remap
+	mul r14.x, r1.x, r2.y
+	mul r14.y, r1.y, r2.w
+	add r2.y, r14.x, r14.y
+
+	mov outpos, r2
+	mov outtc0, r11
+	mov outtc1, r12
+	mov outclr, r3
+	end
+.end
