@@ -55,11 +55,11 @@ unsigned short PortInput_GetPad(signed char* outX, signed char* outY) {
 }
 
 /* PORT (2026-09-30): widescreen option (gfx_pc.c gPortWidescreen): SELECT toggles it (the N64 pad has
- * no SELECT), saved in sdmc:/3ds/oot/settings.txt. Off = the N64's 4:3 picture with side bars. */
+ * no SELECT), saved in sdmc:/3ds/mm/settings.txt. Off = the N64's 4:3 picture with side bars. */
 #define PORT_SETTINGS_PATH sSettingsPath
-/* PORT (2026-10-04): holding L while the game starts reads (and saves) sdmc:/3ds/oot/settings_b.txt instead, when it
+/* PORT (2026-10-04): holding L while the game starts reads (and saves) sdmc:/3ds/mm/settings_b.txt instead, when it
  * exists: a second set of settings for hardware tests, chosen on the console without editing the SD card */
-static const char* sSettingsPath = "sdmc:/3ds/oot/settings.txt";
+static const char* sSettingsPath = "sdmc:/3ds/mm/settings.txt";
 static int sO3dsSimSetting;
 /* bench=1: A/B benchmark - frames alternate between the indexed and the array vertex path (gfx_pc.c
  * gPortLegacyVbo); display-list time is accumulated per variant and logged with each report. Leave the
@@ -1039,14 +1039,14 @@ static unsigned short Port3ds_TouchUiPoll(void) {
         Port3ds_CacheFlush(sFb + MAP_X * 240, MAP_W * 240 * 2);
     }
 
-    { /* verification aid: with sdmc:/3ds/oot/capture_bottom present, dump the panel every 300 polls
+    { /* verification aid: with sdmc:/3ds/mm/capture_bottom present, dump the panel every 300 polls
        * (raw framebuffer + header, overwritten) so tools can check it without screenshots */
         if ((sPolls % 300) == 0) {
-            FILE* flag = fopen("sdmc:/3ds/oot/capture_bottom", "rb");
+            FILE* flag = fopen("sdmc:/3ds/mm/capture_bottom", "rb");
             if (flag != NULL) {
                 u16 w, h;
                 u8* fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, &w, &h);
-                FILE* out = fopen("sdmc:/3ds/oot/bottom_fb.bin", "wb");
+                FILE* out = fopen("sdmc:/3ds/mm/bottom_fb.bin", "wb");
                 fclose(flag);
                 if (out != NULL) {
                     u32 hdr[3] = { w, h, (u32)gfxGetScreenFormat(GFX_BOTTOM) };
@@ -1777,7 +1777,7 @@ void PortGfx_RunTask(OSTask* task) {
     }
     Port3ds_PollInput();
     { extern void Port3ds_PumpInput(void); Port3ds_PumpInput(); } /* live buttons -> game PadMgr */
-    { extern void Audio_PortEnsureNullChannels(void); Audio_PortEnsureNullChannels(); } /* keep uninit audio channels non-NULL so direct game audio calls don't crash */
+    /* PORT MM TODO (audio bring-up): OoT needed Audio_PortEnsureNullChannels() here (an OoT game-side patch) */
     { extern void PortSram_Tick(void); PortSram_Tick(); } /* a save reaches the SD card 0.5 s after the game wrote it */
     /* PORT (2026-10-01): frame skip. On the N64 a frame that takes too long slows the game down (lag). The
      * Old 3DS spends about 80% of an update drawing it (hardware profile: ~98 ms per update, the N64 takes
@@ -2097,8 +2097,9 @@ void PortGfx_RunTask(OSTask* task) {
           n = 0; t0 = t1; } }
 }
 
-#define ROM_PATH "sdmc:/3ds/oot/baserom-decompressed.z64"
-#define LOG_PATH "sdmc:/3ds/oot/boot.log"
+#define ROM_PATH "sdmc:/3ds/mm/baserom-decompressed.z64"
+#define LOG_PATH "sdmc:/3ds/mm/boot.log"
+int gPortMmAudio; /* 1 when built with PORT_MM_AUDIO: the audio pump (ultra_shims.c) runs */
 
 static void boot_flush(void) {
     gfxFlushBuffers();
@@ -2335,7 +2336,7 @@ static void WipeCrashDumps(void) {
 /* PORT (2026-09-29): first thing in main, before any engine code: prove the process started and record
  * how it was launched and what memory it got (a hardware CIA launch showed nothing at all). */
 static void Port_EarlyBootMarker(void) {
-    FILE* f = fopen("sdmc:/3ds/oot/boot_early.log", "a"); /* own file: boot.log is recreated later */
+    FILE* f = fopen("sdmc:/3ds/mm/boot_early.log", "a"); /* own file: boot.log is recreated later */
     if (f != NULL) {
         bool isNew = false;
         u64 programId = 0;
@@ -2391,7 +2392,7 @@ int main(int argc, char** argv) {
     {
         FILE* in = fopen(LOG_PATH, "rb");
         if (in != NULL) {
-            FILE* out = fopen("sdmc:/3ds/oot/boot_prev.log", "wb");
+            FILE* out = fopen("sdmc:/3ds/mm/boot_prev.log", "wb");
             static char buf[16 * 1024];
             size_t n;
             while (out != NULL && (n = fread(buf, 1, sizeof(buf), in)) > 0) {
@@ -2432,9 +2433,9 @@ int main(int argc, char** argv) {
     {
         FILE* fb;
         hidScanInput();
-        if ((hidKeysHeld() & KEY_L) && (fb = fopen("sdmc:/3ds/oot/settings_b.txt", "r")) != NULL) {
+        if ((hidKeysHeld() & KEY_L) && (fb = fopen("sdmc:/3ds/mm/settings_b.txt", "r")) != NULL) {
             fclose(fb);
-            sSettingsPath = "sdmc:/3ds/oot/settings_b.txt";
+            sSettingsPath = "sdmc:/3ds/mm/settings_b.txt";
             Log("settings: settings_b.txt (L held at start)");
         }
     }
@@ -2452,8 +2453,7 @@ int main(int argc, char** argv) {
     /* PORT (2026-09-24): bootproc() normally calls Locale_Init (cart header -> gCurrentRegion,
      * which SaveContext_Init turns into the save language). The port enters Main() directly,
      * so region stayed 0 and the US ROM showed Japanese text. Run it here, after the ROM opens. */
-    { extern void Locale_Init(void); extern int gCurrentRegion;
-      Locale_Init(); PortDbgX("region (1=JP 2=US 3=EU)", (unsigned)gCurrentRegion); }
+    /* PORT MM TODO: OoT ran Locale_Init() here for the save language; check MM's region/language setup */
 
     gViConfigModeType = 0;
 
@@ -2465,17 +2465,24 @@ int main(int argc, char** argv) {
      * link-lists are garbage and any Audio_StopSfxById/etc. walk spins forever.
      * Audio_ResetSfx() is CPU-side only (resets gSfxBanks to empty) and makes
      * all the SFX functions safe until real audio lands. */
-    { extern void Audio_ResetSfx(void); Audio_ResetSfx(); Log("Audio_ResetSfx (sfx banks) done"); }
+    { extern void AudioSfx_Reset(void); AudioSfx_Reset(); Log("AudioSfx_Reset (sfx banks) done"); } /* (MM name) */
     /* Point gAudioCtx table pointers at the native compiled tables so direct game
      * reads (e.g. fanfare -> AudioLoad_GetFontsForSequence) can't NULL-deref. */
-    { extern void Audio_PortInitTables(void); Audio_PortInitTables(); Log("Audio_PortInitTables done"); }
+    /* PORT MM TODO (audio bring-up): OoT ran Audio_PortInitTables() here (an OoT game-side patch) */
     /* Real audio bring-up: Audio_Init (AudioLoad_Init) sets up the audio heap and
      * loads the spec, which sets audioBufferParameters.specUnk4 (nonzero). Without
      * it AudioThread_Update's task path is gated off (specUnk4==0) so no synthesis
      * task is ever built. DMA handler defaults to osEPiStartDma (port-routed). */
+#ifdef PORT_MM_AUDIO
     { extern void Audio_Init(void); extern void Audio_InitSound(void);
       Audio_Init(); Log("Audio_Init done");
       Audio_InitSound(); Log("Audio_InitSound done"); }
+    gPortMmAudio = 1;
+#else
+    /* PORT MM TODO (audio bring-up): audio is off until MM's synthesis is ported - in Azahar it reads and writes
+     * unmapped memory (fatal on hardware). Build with PORT_EXTRA=-DPORT_MM_AUDIO to try it. */
+    Log("audio off (PORT_MM_AUDIO not set)");
+#endif
 
     Port3ds_TouchUiInit(); /* boot finished: the bottom screen becomes the control panel */
     Log_StartAsync();      /* from here on the SD card is written by a background thread */

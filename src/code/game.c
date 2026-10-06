@@ -213,6 +213,11 @@ void GameState_Realloc(GameState* gameState, size_t size) {
     if (gameArena != NULL) {
         THA_Init(&gameState->tha, gameArena, size);
     } else {
+#ifdef __3DS__
+        { extern unsigned gPortDbgRealloc[4]; /* PORT (bring-up): read with the debugger at _dbg_hungup */
+          gPortDbgRealloc[0] = size, gPortDbgRealloc[1] = systemMaxFree;
+          gPortDbgRealloc[2] = bytesFree, gPortDbgRealloc[3] = bytesAllocated; }
+#endif
         THA_Init(&gameState->tha, NULL, 0);
         _dbg_hungup("../game.c", LN1(1065, 1074));
     }

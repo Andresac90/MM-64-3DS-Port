@@ -73,7 +73,7 @@ PORT_CFLAGS := $(ARCH) -std=gnu11 $(OPT) $(WARN) $(PORT_DEFS) $(PORT_INC) $(PORT
 # 16k symbols) the game references for DMA. It's symbol-only (no SECTIONS), so it augments
 # the 3dsx.specs linker script.
 LDFLAGS := $(ARCH) -specs=3dsx.specs -g $(OPT) -L$(CTRULIB)/lib -L$(PORTLIBS)/lib \
-           -Wl,-T,port/rom_symbols.ld -Wl,-T,port/audio_syms_stub.ld \
+           -Wl,-T,port/rom_symbols.ld -Wl,-T,port/audio_syms_stub.ld -Wl,-T,port/archive_symbols.ld \
            -Wl,-T,port/port_stubs.ld
 LIBS    := -lcitro3d -lctru -lm
 
@@ -84,10 +84,10 @@ LIBS    := -lcitro3d -lctru -lm
 # Exclude GC/iQue platform variants (this is a PLATFORM_N64 build), the GC fault
 # screen and the build stamp.
 GAME_EXCLUDE := \
-  src/boot/build.c src/code/z_sram_JPN.c \
+  src/boot/build.c %_JPN.c src/boot/libc/% \
   src/boot/z_std_dma.c src/boot/libc64/malloc.c src/boot/libc64/sleep.c \
   src/code/z_kaleido_manager.c src/code/sched.c src/boot/libu64/loadfragment.c src/boot/libu64/loadfragment2.c \
-  src/code/sys_cfb.c src/code/z_nulltask.c
+  src/code/z_nulltask.c src/code/z_cheap_proc.c
 # Game + engine + utility libraries. Port shims REPLACE src/libultra/os|io (so those are NOT compiled);
 # src/libultra/gu (pure math) IS.
 GAME_DECOMP := $(filter-out $(GAME_EXCLUDE), \
@@ -100,9 +100,10 @@ PORT_GAME_SRCS := \
   port/src/ultra_shims.c port/src/ultra_shims2.c port/src/ultra_shims3.c \
   port/src/dma_shim.c port/src/sched_shim.c port/src/arena_shim.c \
   port/src/rdram_shim.c port/src/boot_globals.c port/src/sleep_shim.c \
-  port/src/syscfb_shim.c port/src/runtime_shim.c port/src/loadfragment_shim.c \
+  port/src/runtime_shim.c port/src/loadfragment_shim.c \
   port/src/kaleido_shim.c port/src/audio_microcode.c port/src/misc_freestanding.c \
-  port/src/port_link_stubs.c port/src/kanread_port.c \
+  port/src/port_link_stubs.c port/src/kanread_port.c port/src/mm_stubs.c \
+  $(wildcard port/src/libultra_mgu/*.c) \
   $(wildcard port/src_gen/*.c)
 
 # PORT platform backends compile in the DEVKIT world.
@@ -117,9 +118,6 @@ DEVKIT_SRCS := \
 ASSET_BUILDDIR  ?= build/$(VERSION)
 ASSET_EXTRACTED ?= extracted/$(VERSION)
 -include port/asset_srcs.mk
-# gameplay_keep is provided by port/src_gen/gameplay_keep_blob.c (the manual blob,
-# gVromMap index 0); drop the committed gameplay_keep asset .c to avoid dup symbols.
-ASSET_SRCS := $(filter-out $(wildcard assets/objects/gameplay_keep/*.c),$(ASSET_SRCS))
 
 GAME_SRCS  := $(GAME_DECOMP) $(PORT_GAME_SRCS)
 GAME_OBJS  := $(addprefix $(BUILD)/,$(GAME_SRCS:.c=.o))
@@ -151,11 +149,12 @@ $(GAME_OBJS): CC_FLAGS := $(GAME_CFLAGS) -fno-toplevel-reorder
 # PORT (2026-09-24): every native asset TU must keep its ROM (declaration) layout, because the
 # DMA shim serves ROM reads of natively-linked segments as native_base + rom_offset (gVromMap).
 # With GCC's default toplevel reordering, icon_item_static came out in REVERSE order (85/86 icons
-# misplaced -> garbage C-button icons). Same flags as the gameplay_keep blob below: keep
+# misplaced -> garbage C-button icons). Keep
 # declaration order, and -Dconst= keeps const and non-const data in one contiguous .data run.
 # -fno-zero-initialized-in-bss: all-zero arrays (e.g. *_zeros_*, empty cam lists) otherwise go to
 # .bss, splitting a segment in two (tools/layout_audit.py flagged 138 segments before these flags).
-$(ASSET_OBJS): CC_FLAGS := $(GAME_CFLAGS) -fno-toplevel-reorder -fno-zero-initialized-in-bss -Dconst=
+$(ASSET_OBJS): CC_FLAGS = $(GAME_CFLAGS) -fno-toplevel-reorder -fno-zero-initialized-in-bss -Dconst= \
+                          -DPORT_ASSET_SEG=$(notdir $(basename $@)) -include port/include/port_asset_start.h
 $(DEVKIT_OBJS):             CC_FLAGS := $(PORT_CFLAGS)
 # PORT PERF (2026-09-30): the per-frame hot paths (renderer, audio microcode) at -O3 -ffast-math, like the
 # sm64 3DS port's Old-3DS speed-up (RetroGamer02/sm64 "Speed boost"). Game logic keeps -O2 without
@@ -163,10 +162,10 @@ $(DEVKIT_OBJS):             CC_FLAGS := $(PORT_CFLAGS)
 HOT_OBJS := $(BUILD)/port/src/gfx/gfx_pc.o $(BUILD)/port/src/gfx3ds/gfx_citro3d.o \
             $(BUILD)/port/src/gfx3ds/gfx_3ds.o $(BUILD)/port/src/audio_microcode.o $(BUILD)/port/src/gfx3ds/c3d_fast.o
 $(HOT_OBJS): CC_FLAGS += -O3 -ffast-math
-# gameplay_keep blob must be a VROM-exact contiguous native LE blob (see its header):
-# -O0 keeps order, -fno-toplevel-reorder keeps declaration order, -Dconst= forces data
-# into .data so gpk_blob.ld can gather it with __gpk_blob_start/_end markers.
-$(BUILD)/port/src_gen/gameplay_keep_blob.o: CC_FLAGS := $(GAME_CFLAGS) -O0 -fno-toplevel-reorder -Dconst=
+
+# gSequenceFontTable is game data: generated from your own ROM's N64 build, never committed
+port/src_gen/sequence_font_table_data.c: build/$(VERSION)/assets/audio/sequence_font_table.o tools/port/gen_sequence_font_table.py
+	python3 tools/port/gen_sequence_font_table.py
 
 $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)

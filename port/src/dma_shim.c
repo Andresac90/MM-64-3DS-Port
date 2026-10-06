@@ -229,6 +229,13 @@ s32 DmaMgr_RequestSync(void* ram, uintptr_t vrom, u32 size) {
     return 0;
 }
 
+/* MM (src/boot/z_std_dma.c): the port reads the DECOMPRESSED ROM, where ROM and VROM addresses coincide. */
+s32 DmaMgr_DmaRomToRam(uintptr_t rom, void* ram, size_t size) {
+    Dma_Copy(ram, rom, size);
+    return 0;
+}
+s32 DmaMgr_TranslateVromToRom(uintptr_t vrom) { return (s32)vrom; }
+const char* func_800809F4(uintptr_t vrom) { (void)vrom; return "??"; } /* (the file name, for debug output) */
 void DmaMgr_Init(void) {}
 void DmaMgr_Stop(void) {}
 
@@ -249,9 +256,9 @@ s32 DmaMgr_AudioDmaHandler(OSPiHandle* pihandle, OSIoMesg* mb, s32 direction) {
  * file on the SD card so saves survive power-off. Called from the osEPiStartDma
  * shim (ultra_shims2.c) for any DMA in the [0x08000000, 0x08008000) window —
  * that shim is the only place that still has the read/write `direction`. */
-#define SRAM_FILE      "sdmc:/3ds/oot/save.bin"
-#define SRAM_TMP       "sdmc:/3ds/oot/save.tmp"
-#define SRAM_BAK       "sdmc:/3ds/oot/save.bak"
+#define SRAM_FILE      "sdmc:/3ds/mm/save.bin"
+#define SRAM_TMP       "sdmc:/3ds/mm/save.tmp"
+#define SRAM_BAK       "sdmc:/3ds/mm/save.bak"
 #define PORT_SRAM_SIZE 0x8000u
 static u8 sSram[PORT_SRAM_SIZE];
 static int sSramLoaded = 0;

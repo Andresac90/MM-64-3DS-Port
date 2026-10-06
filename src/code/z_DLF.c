@@ -185,6 +185,11 @@ void Overlay_FreeGameState(GameStateOverlay* overlayEntry) {
             }
 #endif
 
+#ifdef __3DS__
+            // PORT: overlays are linked into the program; the loader returned the overlay's own address
+            // (port/src/loadfragment_shim.c), which was never allocated: nothing to free
+            if (overlayEntry->loadedRamAddr != overlayEntry->vramStart)
+#endif
             free(overlayEntry->loadedRamAddr);
             overlayEntry->loadedRamAddr = NULL;
         }

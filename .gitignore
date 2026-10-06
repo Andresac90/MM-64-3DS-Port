@@ -36,3 +36,6 @@ graphs/
 
 # macOS: debug symbols from building the tools with clang
 *.dSYM/
+
+# 3DS port: generated from the ROM (game data), never committed
+port/src_gen/sequence_font_table_data.c

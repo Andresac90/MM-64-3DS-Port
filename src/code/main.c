@@ -66,6 +66,11 @@ void Main(void* arg) {
     sysHeap = (uintptr_t)SEGMENT_END(buffers);
     fb = FRAMEBUFFERS_START_ADDR;
     gSystemHeapSize = fb - sysHeap;
+#ifdef __3DS__
+    // PORT: the N64 addresses above don't exist on the 3DS; same size, from real memory
+    extern void* PortGame_SystemHeapRegion(size_t size);
+    sysHeap = (uintptr_t)PortGame_SystemHeapRegion(gSystemHeapSize);
+#endif
     PRINTF(T("システムヒープ初期化 %08x-%08x %08x\n", "System heap initialization %08x-%08x %08x\n"), systemHeapStart,
            fb, sysHeap);
     SystemHeap_Init((void*)sysHeap, gSystemHeapSize);

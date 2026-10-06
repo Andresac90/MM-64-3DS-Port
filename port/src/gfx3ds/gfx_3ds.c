@@ -754,8 +754,8 @@ static void gfx_3ds_read_back_offscreen(void) {
     }
 }
 
-/* verification aid: with sdmc:/3ds/oot/capture_stereo present, every 300 frames while in stereo the
- * whole 240x800 target (both eyes, detiled RGBA8) goes to sdmc:/3ds/oot/stereo_fb_<n>.bin (header w, h) */
+/* verification aid: with sdmc:/3ds/mm/capture_stereo present, every 300 frames while in stereo the
+ * whole 240x800 target (both eyes, detiled RGBA8) goes to sdmc:/3ds/mm/stereo_fb_<n>.bin (header w, h) */
 static void gfx_3ds_debug_dump_stereo(void) {
     static int sFrames;
     static u32* sLin;
@@ -764,7 +764,7 @@ static void gfx_3ds_debug_dump_stereo(void) {
     if (gGfx3DSMode != GFX_3DS_MODE_STEREO || (++sFrames % 300) != 0) {
         return;
     }
-    f = fopen("sdmc:/3ds/oot/capture_stereo", "rb");
+    f = fopen("sdmc:/3ds/mm/capture_stereo", "rb");
     if (f == NULL) {
         return;
     }
@@ -784,7 +784,7 @@ static void gfx_3ds_debug_dump_stereo(void) {
     GSPGPU_InvalidateDataCache(sLin, (size_t)W * H * 4);
     {
         char path[64];
-        snprintf(path, sizeof path, "sdmc:/3ds/oot/stereo_fb_%d.bin", sFrames / 300);
+        snprintf(path, sizeof path, "sdmc:/3ds/mm/stereo_fb_%d.bin", sFrames / 300);
         f = fopen(path, "wb");
     }
     if (f != NULL) {
@@ -795,14 +795,14 @@ static void gfx_3ds_debug_dump_stereo(void) {
     }
 }
 
-/* verification aid for the 60 fps interpolation: with sdmc:/3ds/oot/capture_interp present, every 200th
- * logic frame's passes (in-between ones, then the exact one) go to sdmc:/3ds/oot/interp_fb_<n>_<pass>.bin */
-static int sInterpDumpOn = -1; /* sdmc:/3ds/oot/capture_interp exists (checked once) */
+/* verification aid for the 60 fps interpolation: with sdmc:/3ds/mm/capture_interp present, every 200th
+ * logic frame's passes (in-between ones, then the exact one) go to sdmc:/3ds/mm/interp_fb_<n>_<pass>.bin */
+static int sInterpDumpOn = -1; /* sdmc:/3ds/mm/capture_interp exists (checked once) */
 int gPortInterpDumpSpan = 2;   /* settings interp_dump_span: consecutive logic frames dumped per 200 */
 int gPortInterpDumpAt = -1;    /* settings interp_dump_at: dump logic frames at..at+span-1 instead (once) */
 static bool interp_dump_on(void) {
     if (sInterpDumpOn < 0) {
-        FILE* f = fopen("sdmc:/3ds/oot/capture_interp", "rb");
+        FILE* f = fopen("sdmc:/3ds/mm/capture_interp", "rb");
         sInterpDumpOn = f != NULL;
         if (f != NULL) fclose(f);
     }
@@ -833,7 +833,7 @@ static void gfx_3ds_debug_dump_interp(void) {
                                         GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGBA8) |
                                         GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO));
             GSPGPU_InvalidateDataCache(sLin, (size_t)W * H * 4);
-            snprintf(path, sizeof path, "sdmc:/3ds/oot/interp_fb_%d_%d.bin", sLogic, sPass);
+            snprintf(path, sizeof path, "sdmc:/3ds/mm/interp_fb_%d_%d.bin", sLogic, sPass);
             f = fopen(path, "wb");
             if (f != NULL) {
                 u32 hdr[2] = { (u32)W, (u32)H };
@@ -946,12 +946,12 @@ static u64 sFlipNextSlot;                /* 3ds_main.c: the vblank the next fram
 unsigned gPortPerfFlipShown, gPortPerfFlipSkipped, gPortPerfFlipRepeats;
 static Thread sFlipThread;
 
-/* debug (settings flipdump=1): the buffer on screen, once per perf report, to sdmc:/3ds/oot/flip_shown.bin */
+/* debug (settings flipdump=1): the buffer on screen, once per perf report, to sdmc:/3ds/mm/flip_shown.bin */
 int gPortFlipDump;
 void Port3ds_FlipDump(void) {
     FILE* f;
     u32 id = sFlipShown, hdr[3];
-    if (!sFlipOn || !gPortFlipDump || id == 0 || (f = fopen("sdmc:/3ds/oot/flip_shown.bin", "wb")) == NULL) {
+    if (!sFlipOn || !gPortFlipDump || id == 0 || (f = fopen("sdmc:/3ds/mm/flip_shown.bin", "wb")) == NULL) {
         return;
     }
     hdr[0] = id, hdr[1] = sFlipMode[id % FLIP_N], hdr[2] = FLIP_BYTES;

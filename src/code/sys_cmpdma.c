@@ -21,6 +21,13 @@ typedef struct {
 
 CmpDmaBuffer sDmaBuffer;
 
+#ifdef __3DS__
+// PORT: the archive's offset table is big-endian ROM data (the 3DS is little-endian)
+#define CMPDMA_BE(x) __builtin_bswap32(x)
+#else
+#define CMPDMA_BE(x) (x)
+#endif
+
 void func_80178AC0(u16* src, void* dst, size_t size) {
     Color_RGBA8_u32 spC;
     Color_RGBA16_2 tc;
@@ -55,7 +62,7 @@ void CmpDma_GetFileInfo(uintptr_t segmentRom, s32 id, uintptr_t* outFileRom, siz
 
     DmaMgr_DmaRomToRam(segmentRom, &sDmaBuffer.dataStart, sizeof(sDmaBuffer.dataStart));
 
-    dataStart = sDmaBuffer.dataStart;
+    dataStart = CMPDMA_BE(sDmaBuffer.dataStart);
     refOff = id * sizeof(u32);
 
     // if id is >= idMax
@@ -66,12 +73,12 @@ void CmpDma_GetFileInfo(uintptr_t segmentRom, s32 id, uintptr_t* outFileRom, siz
         // get offset start of next file, i.e. size of first file
         DmaMgr_DmaRomToRam(segmentRom + sizeof(u32), &sDmaBuffer.dataSize, sizeof(sDmaBuffer.dataSize));
         *outFileRom = segmentRom + dataStart;
-        *size = sDmaBuffer.dataSize;
+        *size = CMPDMA_BE(sDmaBuffer.dataSize);
     } else {
         // get offset start, end from dataStart
         DmaMgr_DmaRomToRam(refOff + segmentRom, &sDmaBuffer.offset, sizeof(sDmaBuffer.offset));
-        *outFileRom = sDmaBuffer.offset.start + segmentRom + dataStart;
-        *size = sDmaBuffer.offset.end - sDmaBuffer.offset.start;
+        *outFileRom = CMPDMA_BE(sDmaBuffer.offset.start) + segmentRom + dataStart;
+        *size = CMPDMA_BE(sDmaBuffer.offset.end) - CMPDMA_BE(sDmaBuffer.offset.start);
     }
     *flag = 0;
 }
@@ -114,7 +121,7 @@ void CmpDma_LoadAllFiles(uintptr_t segmentVrom, void* dst, size_t size) {
 
     DmaMgr_DmaRomToRam(rom, &sDmaBuffer.dataStart, sizeof(sDmaBuffer.dataStart));
 
-    dataStart = sDmaBuffer.dataStart;
+    dataStart = CMPDMA_BE(sDmaBuffer.dataStart);
     nextDst = dst;
     end = (dataStart / sizeof(u32)) - 1;
 

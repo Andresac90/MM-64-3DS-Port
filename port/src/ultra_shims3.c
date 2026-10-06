@@ -1,26 +1,26 @@
 /*
  * ultra_shims3.c — raw RCP/SI register access, interrupt/FPU control, and the
  * 64DD "Leo" library (drive absent: every call reports failure/no disk).
- * Signatures match include/ultra64/*.h exactly.
+ * Signatures match MM's include/PR/*.h exactly.
  */
 #include "ultra64.h"
 
 /* --- RSP/RDP/SI raw access --- */
 u32 __osSpGetStatus(void) { return 0; }
 void __osSpSetStatus(u32 status) { (void)status; }
-s32 __osSpSetPc(void* pc) { (void)pc; return 0; }
-s32 __osSpRawStartDma(s32 direction, void* devAddr, void* dramAddr, u32 size) {
+s32 __osSpSetPc(u32 pc) { (void)pc; return 0; }
+s32 __osSpRawStartDma(s32 direction, u32 devAddr, void* dramAddr, size_t size) {
     (void)direction; (void)devAddr; (void)dramAddr; (void)size;
     return 0;
 }
-u32 __osSpDeviceBusy(void) { return 0; }
+s32 __osSpDeviceBusy(void) { return 0; }
 u32 __osDpDeviceBusy(void) { return 0; }
 s32 __osSiDeviceBusy(void) { return 0; }
 
 /* --- interrupt + FPU control --- */
-s32 __osDisableInt(void) { return 0; }
-void __osRestoreInt(s32 mask) { (void)mask; }
-void __osSetFpcCsr(u32 v) { (void)v; }
+OSIntMask __osDisableInt(void) { return 0; }
+void __osRestoreInt(OSIntMask mask) { (void)mask; }
+u32 __osSetFpcCsr(u32 v) { (void)v; return 0; }
 u32 __osGetFpcCsr(void) { return 0; }
 
 /* --- fault/exception introspection (fault_n64.c) --- */

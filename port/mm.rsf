@@ -5,13 +5,13 @@
 # for the main thread), no kernel-version fields, "gsp::Gsp" instead of gsp::Gpu. Azahar enforces none of these.
 # Port values: SystemMode 96MB (Old 3DS: ~51MB image + heaps), SystemModeExt 124MB + 804MHz + L2 (New 3DS).
 BasicInfo:
-  Title                   : OcarinaOfTime
-  ProductCode             : CTR-P-CZLE
+  Title                   : MajorasMaskN64
+  ProductCode             : CTR-H-MMNP
   Logo                    : Homebrew
 
 TitleInfo:
   Category                : Application
-  UniqueId                : 0xF0C64 # own id (0xF8000 is the homebrew template default, shared by other titles)
+  UniqueId                : 0xF0C65 # own id (the OoT port is 0xF0C64) (0xF8000 is the homebrew template default, shared by other titles)
 
 Option:
   UseOnSD                 : true # true if App is to be installed to SD

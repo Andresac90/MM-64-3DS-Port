@@ -1,11 +1,11 @@
 /* statedump.c - write raw game state to the SD card for tools/statediff (N64-vs-3DS state diff).
  * Enabled only in builds with GAME_EXTRA=-DPORT_STATEDUMP=<gameplayFrames>; the hook in
  * Play_Update calls these once, at the start of that frame. Files (all raw, native byte order):
- *   sdmc:/3ds/oot/sd_play.bin    PlayState
- *   sdmc:/3ds/oot/sd_save.bin    SaveContext
- *   sdmc:/3ds/oot/sd_actors.bin  per actor: u32 category, u32 size, then the whole instance
- *   sdmc:/3ds/oot/sd_rng.bin     RNG trace (see PortRngTrace below)
- *   sdmc:/3ds/oot/sd_depth.bin   u32 width, u32 height, then the previous frame's D24S8 depth (linear)
+ *   sdmc:/3ds/mm/sd_play.bin    PlayState
+ *   sdmc:/3ds/mm/sd_save.bin    SaveContext
+ *   sdmc:/3ds/mm/sd_actors.bin  per actor: u32 category, u32 size, then the whole instance
+ *   sdmc:/3ds/mm/sd_rng.bin     RNG trace (see PortRngTrace below)
+ *   sdmc:/3ds/mm/sd_depth.bin   u32 width, u32 height, then the previous frame's D24S8 depth (linear)
  * tools/statediff/statediff.py reads the same structs from ares (N64) and diffs field by field. */
 #include <stdio.h>
 #include <stdint.h>
@@ -49,9 +49,9 @@ static int sDumpIndex;
 static const char* dump_path(const char* name) {
     static char path[64];
     if (sDumpIndex < 0) {
-        snprintf(path, sizeof(path), "sdmc:/3ds/oot/sd_%s.bin", name);
+        snprintf(path, sizeof(path), "sdmc:/3ds/mm/sd_%s.bin", name);
     } else {
-        snprintf(path, sizeof(path), "sdmc:/3ds/oot/tour/sd_%s_%d.bin", name, sDumpIndex);
+        snprintf(path, sizeof(path), "sdmc:/3ds/mm/tour/sd_%s_%d.bin", name, sDumpIndex);
     }
     return path;
 }
@@ -63,7 +63,7 @@ void PortStateDump_Begin(int index, const void* play, unsigned playSize, const v
 
     sDumpIndex = index;
     if (index >= 0) {
-        mkdir("sdmc:/3ds/oot/tour", 0777);
+        mkdir("sdmc:/3ds/mm/tour", 0777);
     }
     write_file(dump_path("play"), play, playSize);
     write_file(dump_path("save"), save, saveSize);
@@ -176,6 +176,6 @@ void PortStateDump_End(void) {
         PortDbg(msg);
         return;
     }
-    write_file("sdmc:/3ds/oot/sd_rng.bin", sRngTrace, sRngCount * 8);
+    write_file("sdmc:/3ds/mm/sd_rng.bin", sRngTrace, sRngCount * 8);
     PortDbg("statedump: wrote sd_play/sd_save/sd_actors.bin");
 }

@@ -69,7 +69,7 @@ s32 osRecvMesg(OSMesgQueue* mq, OSMesg* msg, s32 flag) {
 static OSThread* sThreads[32];
 static int sThreadCount = 0;
 
-void osCreateThread(OSThread* t, OSId id, void (*entry)(void*), void* arg, void* sp, OSPri pri) {
+void osCreateThread(OSThread* t, OSId id, void* entry, void* arg, void* sp, OSPri pri) { /* (MM prototype) */
     (void)sp;
     t->id = id;
     t->priority = pri;
@@ -135,24 +135,24 @@ OSTime osGetTime(void) { return TicksNow(); }
 void osSetTime(OSTime t) { (void)t; }
 u32 osGetCount(void) { return (u32)TicksNow(); }
 
-s32 osSetTimer(OSTimer* timer, OSTime countdown, OSTime interval, OSMesgQueue* mq, OSMesg msg) {
+int osSetTimer(OSTimer* timer, OSTime countdown, OSTime interval, OSMesgQueue* mq, OSMesg msg) {
     (void)timer; (void)countdown; (void)interval; (void)mq; (void)msg;
     return 0; /* frame loop will deliver time-based messages */
 }
-s32 osStopTimer(OSTimer* timer) { (void)timer; return 0; }
+int osStopTimer(OSTimer* timer) { (void)timer; return 0; }
 
 /* ------------------------------------------------------------------ */
 /* Cache / TLB / misc CPU — meaningless on the host                    */
 
-void osInvalDCache(void* addr, s32 size) { (void)addr; (void)size; }
-void osInvalICache(void* addr, s32 size) { (void)addr; (void)size; }
+void osInvalDCache(void* addr, size_t size) { (void)addr; (void)size; }
+void osInvalICache(void* addr, size_t size) { (void)addr; (void)size; }
 void osWritebackDCache(void* addr, s32 size) { (void)addr; (void)size; }
 void osWritebackDCacheAll(void) {}
 u32 osVirtualToPhysical(void* addr) { return (u32)(uintptr_t)addr; }
 void osMapTLBRdb(void) {}
 void osUnmapTLBAll(void) {}
 s32 osAfterPreNMI(void) { return 0; }
-void osInitialize(void) {}
+void __osInitialize_common(void) {} /* (MM: osInitialize() is a macro for it) */
 u32 osGetMemSize(void) { return 8 * 1024 * 1024; }
 
 /* ------------------------------------------------------------------ */
@@ -237,6 +237,11 @@ extern void AudioMgr_HandleRetrace(AudioMgr* audioMgr);
 extern void PortDbgX(const char* label, unsigned val);
 static void Port3ds_PumpAudio_impl(void);
 void Port3ds_PumpAudio(void) {
+    extern int gPortMmAudio; /* PORT MM TODO (audio bring-up): off until MM's audio is ported */
+    if (!gPortMmAudio) {
+        return;
+    }
+    {
     extern volatile unsigned char gPortProf;
     extern void Port3ds_ScanBetweenUpdates(void);
     unsigned char prev = gPortProf;
@@ -244,11 +249,14 @@ void Port3ds_PumpAudio(void) {
     gPortProf = 10; /* PROF_AUDIO (port_prof.h) */
     Port3ds_PumpAudio_impl();
     gPortProf = prev;
+    }
 }
 static void Port3ds_PumpAudio_impl(void) {
     /* The threadless port never runs cic6105/AudioMgr_ThreadEntry which set this
      * to ALL, so it can be stuck inhibiting audio updates. Force ALL each frame. */
+#if 0 /* PORT MM TODO: OoT's audio-manager activity level; MM's AudioMgr has no such register */
     R_AUDIOMGR_ACTIVITY_LEVEL = AUDIOMGR_ACTIVITY_LEVEL_ALL;
+#endif
     /* Flush the game's queued audio commands to the audio thread each frame.
      * Normally Audio_Update does this, but a scene audio-reset sets D_80133418=1
      * which blocks Audio_Update's body -> the reset command never flushes ->
@@ -261,10 +269,12 @@ static void Port3ds_PumpAudio_impl(void) {
      * completed (resetStatus=0), so post the ack ourselves when a wait is pending.
      * This lets func_800FAD34 clear the flag AND run func_800F7170 (restart SFX +
      * unmute), which force-clearing the flag would skip. */
+#if 0 /* PORT MM TODO (audio bring-up): OoT's reset handshake flag; find MM's equivalent */
     { extern unsigned char D_80133418;
       if (D_80133418 != 0) {
           osSendMesg(gAudioCtx.audioResetQueueP, (OSMesg)(unsigned)gAudioCtx.specId, OS_MESG_NOBLOCK);
       } }
+#endif
     /* NOTE: do NOT flush cmds here - Audio_Update (now unblocked) owns the
      * ScheduleProcessCmds flush; a second flush corrupts the read-pos/STOP state. */
     {
@@ -300,56 +310,20 @@ int gPortHudTop = 1;
 volatile int gPortTouchOcarina, gPortTouchBoots;
 volatile int gPortTouchPage = -1;
 
-static short Port_AmmoFor(int item) {
-    switch (item) {
-        case ITEM_DEKU_STICK: case ITEM_DEKU_NUT: case ITEM_BOMB: case ITEM_BOW: case ITEM_SLINGSHOT:
-        case ITEM_BOMBCHU: case ITEM_MAGIC_BEAN:
-            return AMMO(item);
-        case ITEM_BOW_FIRE: case ITEM_BOW_ICE: case ITEM_BOW_LIGHT:
-            return AMMO(ITEM_BOW);
-        default:
-            return -1;
-    }
-}
-
+/* PORT MM TODO: the touch panel's game state (rupees, hearts, magic, C items) - OoT's save layout was read here;
+ * MM's (gSaveContext.save.saveInfo.playerData, masks, the three-day clock) comes with the MM touch screen. Until then the
+ * panel shows no game state. */
 void Port_GetHudInfo(PortHudInfo* h) {
     int i;
     memset(h, 0, sizeof(*h));
     h->rupees = h->keys = -1;
     h->ocarina = ITEM_NONE;
     for (i = 0; i < 3; i++) h->cItem[i] = ITEM_NONE, h->cDisabled[i] = 1, h->cAmmo[i] = -1;
-    if (gSaveContext.gameMode != GAMEMODE_NORMAL || gSaveContext.save.info.playerData.healthCapacity == 0) {
-        return; /* boot logo, title, file select: no save loaded yet */
-    }
-    h->valid = 1;
-    h->rupees = gSaveContext.save.info.playerData.rupees;
-    h->keys = gPortHudKeys;
-    h->health = gSaveContext.save.info.playerData.health;
-    h->healthCapacity = gSaveContext.save.info.playerData.healthCapacity;
-    h->magic = gSaveContext.save.info.playerData.magic;
-    h->magicCapacity = gSaveContext.save.info.playerData.magicLevel != 0 ? gSaveContext.magicCapacity : 0;
-    h->boots = CUR_EQUIP_VALUE(EQUIP_TYPE_BOOTS);
-    h->ocarina = INV_CONTENT(ITEM_OCARINA_FAIRY);
-    for (i = 0; i < 3; i++) {
-        h->cItem[i] = gSaveContext.save.info.equips.buttonItems[i + 1];
-        h->cDisabled[i] = gSaveContext.buttonStatus[i + 1] == BTN_DISABLED;
-        h->cAmmo[i] = Port_AmmoFor(h->cItem[i]);
-    }
 }
 
 /* 32x32 RGBA32 icon for any item id (icon_item_static), read from ROM once and cached; NULL if out of
  * range. For panel buttons whose item is not on a C button (boots, ocarina). Game thread only. */
 const unsigned char* Port_GetItemIcon(int itemId) {
-    enum { N = 8 };
-    static unsigned char sIcons[N][ITEM_ICON_SIZE] __attribute__((aligned(8)));
-    static short sIds[N] = { -1, -1, -1, -1, -1, -1, -1, -1 };
-    static int sNext;
-    int i;
-    if (itemId < 0 || itemId > ITEM_BOOTS_HOVER) return NULL;
-    for (i = 0; i < N; i++) if (sIds[i] == itemId) return sIcons[i];
-    i = sNext;
-    sNext = (sNext + 1) % N;
-    DmaMgr_RequestSync(sIcons[i], GET_ITEM_ICON_VROM(itemId), ITEM_ICON_SIZE);
-    sIds[i] = (short)itemId;
-    return sIcons[i];
+    (void)itemId; /* PORT MM TODO: MM's item icons (icon_item_static) for the touch panel */
+    return NULL;
 }

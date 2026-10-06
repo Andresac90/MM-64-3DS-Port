@@ -45,10 +45,9 @@ void PortOverlayStatics_Reset(uintptr_t vromStart) {
         const OverlayStatics* o = &sOverlayStatics[i];
         if (o->vromStart == vromStart) {
             if (sInitialData[i] != NULL) {
-                extern void Cutscene_ForgetNormalizedRange(void* start, void* end);
                 memcpy(o->dataStart, sInitialData[i], o->dataStop - o->dataStart);
-                /* cutscene scripts in this data are BE-packed again: let z_demo.c re-normalize them */
-                Cutscene_ForgetNormalizedRange(o->dataStart, o->dataStop);
+                /* PORT MM TODO (cutscenes): the OoT port re-normalized BE-packed cutscene scripts here
+                 * (Cutscene_ForgetNormalizedRange, an OoT z_demo.c patch) */
             }
             if (o->bssStart != NULL && o->bssStop > o->bssStart) {
                 memset(o->bssStart, 0, o->bssStop - o->bssStart);

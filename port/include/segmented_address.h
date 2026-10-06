@@ -80,5 +80,7 @@ static inline void* PortSegmentedToVirtual(uintptr_t addr) {
  * rngtrace, Lake Hylia). Evaluate it twice too; the result uses the second value, as on N64 for
  * the same-segment addresses the game passes. */
 #define SEGMENTED_TO_VIRTUAL(addr) ((void)(addr), PortSegmentedToVirtual((uintptr_t)(addr)))
+/* MM's name for it (include/segmented_address.h) */
+#define SEGMENTED_TO_K0(addr) SEGMENTED_TO_VIRTUAL(addr)
 
 #endif

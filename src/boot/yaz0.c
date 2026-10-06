@@ -82,7 +82,12 @@ s32 Yaz0_DecompressImpl(u8* src, u8* dst) {
     u8* backPtr;
     size_t chunkSize;
     u32 off;
+#ifdef __3DS__
+    // PORT: the header is big-endian ROM data (the 3DS is little-endian)
+    u32 magic = ((u32)src[0] << 24) | ((u32)src[1] << 16) | ((u32)src[2] << 8) | src[3];
+#else
     u32 magic = ((Yaz0Header*)src)->magic;
+#endif
 
     if (magic != YAZ0_MAGIC) {
         PRINTF(T("slidstart_szs IDが違います (%02x %02x %02x %02x %08x)\n",
@@ -91,7 +96,11 @@ s32 Yaz0_DecompressImpl(u8* src, u8* dst) {
         return -1;
     }
 
+#ifdef __3DS__
+    dstEnd = dst + (((u32)src[4] << 24) | ((u32)src[5] << 16) | ((u32)src[6] << 8) | src[7]);
+#else
     dstEnd = dst + ((Yaz0Header*)src)->decSize;
+#endif
     src += sizeof(Yaz0Header);
 
     do {

@@ -97,7 +97,7 @@ void Port3ds_AudioSubmit(const s16* samples, int nsamples) {
 
 /* PORT (2026-09-21): capture the engine's mixed PCM to a WAV on the SD card, so the audio
  * can be VERIFIED/heard even when ndsp is unavailable (Azahar needs dspfirm.cdc, which ndspInit
- * requires). Writes 20 s of 32 kHz stereo s16 (from the first audible frame) to sdmc:/3ds/oot/oot_audio.wav then stops. */
+ * requires). Writes 20 s of 32 kHz stereo s16 (from the first audible frame) to sdmc:/3ds/mm/oot_audio.wav then stops. */
 static void wav_put32(FILE* f, unsigned v) { fputc(v&0xFF,f);fputc((v>>8)&0xFF,f);fputc((v>>16)&0xFF,f);fputc((v>>24)&0xFF,f); }
 static void wav_put16(FILE* f, unsigned v) { fputc(v&0xFF,f);fputc((v>>8)&0xFF,f); }
 static FILE* sWavFile = NULL;
@@ -111,8 +111,8 @@ static void Port3ds_AudioDumpWav(const s16* le_stereo, int nsamples) {
     if (sWavDone) return;
     if (sWavWanted < 0) {
         /* opt-in (verification builds/emulator): writing to the SD card from the frame loop stalls real
-         * hardware for the whole capture, so only capture when sdmc:/3ds/oot/capture_audio exists */
-        FILE* flag = fopen("sdmc:/3ds/oot/capture_audio", "rb");
+         * hardware for the whole capture, so only capture when sdmc:/3ds/mm/capture_audio exists */
+        FILE* flag = fopen("sdmc:/3ds/mm/capture_audio", "rb");
         sWavWanted = flag != NULL;
         if (flag != NULL) fclose(flag);
     }
@@ -124,10 +124,10 @@ static void Port3ds_AudioDumpWav(const s16* le_stereo, int nsamples) {
         /* start at the first audible frame (the boot logo is silent, as on N64) */
         for (i = 0; i < nsamples * 2 && le_stereo[i] == 0; i++) {}
         if (i == nsamples * 2) return;
-        sWavFile = fopen("sdmc:/3ds/oot/oot_audio.wav", "wb");
+        sWavFile = fopen("sdmc:/3ds/mm/oot_audio.wav", "wb");
         if (sWavFile == NULL) { sWavDone = 1; return; }
         for (i = 0; i < 44; i++) fputc(0, sWavFile); /* header placeholder */
-        PortDbg("[audio] WAV capture started -> sdmc:/3ds/oot/oot_audio.wav");
+        PortDbg("[audio] WAV capture started -> sdmc:/3ds/mm/oot_audio.wav");
     }
     fwrite(le_stereo, 4, (size_t)nsamples, sWavFile); /* native LE s16 stereo == WAV PCM layout */
     sWavSamples += (unsigned)nsamples;
@@ -139,7 +139,7 @@ static void Port3ds_AudioDumpWav(const s16* le_stereo, int nsamples) {
         wav_put32(sWavFile, 32000); wav_put32(sWavFile, 32000 * 4); wav_put16(sWavFile, 4); wav_put16(sWavFile, 16);
         fputs("data", sWavFile); wav_put32(sWavFile, dataBytes);
         fclose(sWavFile); sWavFile = NULL; sWavDone = 1;
-        PortDbg("[audio] WAV capture COMPLETE (20s) -> sdmc:/3ds/oot/oot_audio.wav");
+        PortDbg("[audio] WAV capture COMPLETE (20s) -> sdmc:/3ds/mm/oot_audio.wav");
     }
 }
 

@@ -303,11 +303,11 @@ static void import_texture(int unit, int tile_index) {
  * passes, transition tiles. Painting those onto the screen covered the pause menu with
  * their full-rect clears. Only draws whose color image is a real framebuffer (SysCfb) reach
  * the screen; other targets are dropped until real render-to-texture exists (roadmap G10). */
-extern uintptr_t sSysCfbFbPtr[2];
+extern void* gFramebuffers[2]; /* MM: sys_cfb.c (OoT port: sSysCfbFbPtr) */
 static inline int gfx_cimg_is_screen(void) {
     uintptr_t a = (uintptr_t)rdp.color_image_address;
     /* a framebuffer address with another width is a different image (Player_DrawPause's 64-wide one) */
-    return a == 0 || ((a == sSysCfbFbPtr[0] || a == sSysCfbFbPtr[1]) &&
+    return a == 0 || ((a == (uintptr_t)gFramebuffers[0] || a == (uintptr_t)gFramebuffers[1]) &&
                       (rdp.color_image_width == 0 || rdp.color_image_width == SCREEN_WIDTH));
 }
 #else
@@ -712,7 +712,7 @@ static uint8_t rgba32_buf[65536] __attribute__((aligned(32)));
 /* tools/make_link_banner.py --model: Link's pause-menu preview as a 3D model for the HOME Menu banner. While the
  * preview's colour image is the target, every vertex is processed on the CPU (the N64's own lighting and texture
  * coordinates) and every triangle recorded with its world-space positions and material; each texture is decoded again
- * when a triangle first uses it (the tile state is that draw's). sdmc:/3ds/oot/link_mesh.bin is written once, after the
+ * when a triangle first uses it (the tile state is that draw's). sdmc:/3ds/mm/link_mesh.bin is written once, after the
  * preview's 10th frame (it is drawn while the menu is open). */
 extern u16 gPortIconGenBuf[];
 typedef struct {
@@ -758,7 +758,7 @@ static void mesh_keep_texture(uint32_t id, const uint8_t* buf, uint32_t w, uint3
     }
 }
 static void mesh_write(void) {
-    FILE* f = fopen("sdmc:/3ds/oot/link_mesh.tmp", "wb");
+    FILE* f = fopen("sdmc:/3ds/mm/link_mesh.tmp", "wb");
     uint8_t used[4096];
     uint32_t i, nt = 0;
     if (f == NULL) {
@@ -782,7 +782,7 @@ static void mesh_write(void) {
         }
     }
     fclose(f);
-    rename("sdmc:/3ds/oot/link_mesh.tmp", "sdmc:/3ds/oot/link_mesh.bin"); /* complete when it appears */
+    rename("sdmc:/3ds/mm/link_mesh.tmp", "sdmc:/3ds/mm/link_mesh.bin"); /* complete when it appears */
 }
 #endif
 
@@ -1035,7 +1035,7 @@ static uint32_t gfx_gather_texture(int tile) {
 #ifdef PORT_TEXDUMP
 /* DEBUG TOOL (opt-in, build with PORT_EXTRA=-DPORT_TEXDUMP): write every uniquely-addressed
  * texture the port decodes (source address, N64 fmt/siz, decoded RGBA8) to
- * sdmc:/3ds/oot/texdump.bin, for diffing against the decomp's golden PNGs
+ * sdmc:/3ds/mm/texdump.bin, for diffing against the decomp's golden PNGs
  * (tools/texdiff.py). Record: "TEXD" u32 addr, u8 fmt, u8 siz, u16 0, u32 w, u32 h, w*h*4 RGBA. */
 static void texdump_record(const uint8_t* addr, uint8_t fmt, uint8_t siz, uint32_t size_bytes, uint32_t line_bytes) {
     static FILE* f = NULL;
@@ -1051,7 +1051,7 @@ static void texdump_record(const uint8_t* addr, uint8_t fmt, uint8_t siz, uint32
     w = (siz == G_IM_SIZ_32b) ? line_bytes / 2 : line_bytes * 8 / bits; /* 32b: TMEM line counts 2 bytes/texel */
     h = (siz == G_IM_SIZ_32b) ? (size_bytes / 2) / line_bytes : size_bytes / line_bytes;
     if (w == 0 || h == 0 || w * h * 4 > sizeof(rgba32_buf)) return;
-    if (f == NULL) { f = fopen("sdmc:/3ds/oot/texdump.bin", "wb"); if (f == NULL) { dead = 1; return; } }
+    if (f == NULL) { f = fopen("sdmc:/3ds/mm/texdump.bin", "wb"); if (f == NULL) { dead = 1; return; } }
     hdr[0] = 0x44584554u; /* "TEXD" */
     hdr[1] = (uint32_t)(uintptr_t)addr;
     hdr[2] = (uint32_t)fmt | ((uint32_t)siz << 8);
@@ -2546,7 +2546,7 @@ static int pack_vertex(const PVtx* p, bool z_is_from_0_to_1, int slot) {
 #ifdef __3DS__
 static void gpu_pack_clip_tri(const PVtx* t[3]);
 /* PORT DEBUG (2026-10-02): settings tjdump=<frame>: every triangle drawn to the screen in that display-list
- * walk, in screen space (x/w, y/w), to sdmc:/3ds/oot/tjdump.bin for tools/tjunctions.py, which counts
+ * walk, in screen space (x/w, y/w), to sdmc:/3ds/mm/tjdump.bin for tools/tjunctions.py, which counts
  * T-junctions - a vertex inside another triangle's edge, where the PICA's rasterizer can leave pixel cracks
  * (the shading split adds vertices on edges). Off unless the setting is present. */
 static void* sDrawTarget; /* NULL = screen (gfx_select_target) */
@@ -5406,7 +5406,7 @@ void gfx_run(Gfx *commands) {
         sTargetDirty = true;
     }
     if (sTjOn) {
-        FILE* f = fopen("sdmc:/3ds/oot/tjdump.bin", "wb");
+        FILE* f = fopen("sdmc:/3ds/mm/tjdump.bin", "wb");
         sTjOn = 0;
         if (f != NULL && sTj != NULL) {
             fwrite(&sTjN, 4, 1, f);
