@@ -32,7 +32,7 @@ endseg
 
 ### Non-matchings
 
-If you can't match a function even with everyone's help in the `mm-decomp-help` discord channel, don't worry overlong about it. Hopefully you can get it to do the same thing as the original (non-matching), and then you set it up to use the original asm for the matching build, and your code for the non-matching. This looks like
+If you can't match a function even with help, don't worry overlong about it. Hopefully you can get it to do the same thing as the original (non-matching), and then you set it up to use the original asm for the matching build, and your code for the non-matching. This looks like
 
 ```c
 #ifdef NON_MATCHING
@@ -89,6 +89,6 @@ Please also update the status of the file on Trello/the spreadsheet.
 
 Pull requests may be reviewed by anyone (who knows enough about the conventions of the project), and all must be reviewed and approved by two leads and one extra contributor.
 
-To implement suggestions made in reviews, it is generally easier to be consistent if you push more commits from your local branch. It is also quite possible that in the meantime some other PR has gone in, and git will ask you to merge main before you add more commits. This is normally fairly painless, although often you have to resolve merge conflicts. If in doubt, backup your work before doing anything, and ask in Discord before doing anything drastic, or if you don't understand what git is telling you.
+To implement suggestions made in reviews, it is generally easier to be consistent if you push more commits from your local branch. It is also quite possible that in the meantime some other PR has gone in, and git will ask you to merge main before you add more commits. This is normally fairly painless, although often you have to resolve merge conflicts. If in doubt, backup your work before doing anything, and ask for help before doing anything drastic, or if you don't understand what git is telling you.
 
 There is no need to wait for your PR to be approved and committed before working on your next file.

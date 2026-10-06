@@ -7,7 +7,7 @@ Every review submitted helps us keep code quality high and code merged in more q
 This document is meant to be a set of tips and guidelines for reviewers of pull requests to the project.
 For general information about the project, see [our readme](https://github.com/zeldaret/mm/blob/main/README.md).
 
-Most discussions happen on our [Discord Server](https://discord.zelda.deco.mp) where you are welcome to ask if you need help getting started, or if you have any questions regarding this project and other decompilation projects.
+Questions about the decompilation itself go to [zeldaret/mm](https://github.com/zeldaret/mm).
 
 Other links are available in the [CONTRIBUTING.md](CONTRIBUTING.md)
 
@@ -24,7 +24,7 @@ You should first famiiarise yourself with our [Contributing guide](CONTRIBUTING.
 - When reviewing a PR it is suggested that you follow the checklist outlined in this section.
 - You are not required to go through *every* item in the checklist. It is meant as a guide; if you have only one thing you want to mention, that's fine too.
 - Once the PR author has addressed all of your comments, you should add a review with approval to the PR to signify to the project leads that this PR has been through peer review.
-- If someone does not address your comments and expresses that a different way is better than yours, look for feedback from other contributors (we encourage discussing this sort of thing in Discord, since long GitHub conversations get hard to read). The project leads will have final say in these situations. All decisions are generally guided by a consensus of contributors.
+- If someone does not address your comments and expresses that a different way is better than yours, look for feedback from other contributors. The project leads will have final say in these situations. All decisions are generally guided by a consensus of contributors.
 
 ### Reviewer Checklist
 

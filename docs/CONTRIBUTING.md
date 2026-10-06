@@ -6,7 +6,7 @@ All contributions are welcome. This is a group effort, and even small contributi
 This document is meant to be a set of tips and guidelines for contributing to the project.
 For general information about the project, see [our readme](https://github.com/zeldaret/mm/blob/main/README.md).
 
-Most discussions happen on our [Discord Server](https://discord.zelda.deco.mp) where you are welcome to ask if you need help getting started, or if you have any questions regarding this project and other decompilation projects.
+Questions about the decompilation itself go to [zeldaret/mm](https://github.com/zeldaret/mm).
 
 ## Useful Links
 
@@ -17,7 +17,6 @@ Most discussions happen on our [Discord Server](https://discord.zelda.deco.mp) w
 - [Zelda 64 Reverse Engineering Website](https://zelda.deco.mp/games/mm) - Our homepage, with FAQ and progress graph :chart_with_upwards_trend:.
 - [MM decomp tutorial](tutorial/contents.md) Detailed tutorial for learning in general how decomp works and how to decompile a small, simple file.
 - [Introduction to OOT decomp](https://github.com/zeldaret/oot/blob/main/docs/tutorial/contents.md) - The tutorial the MM one was based on. For OOT, but largely applicable to MM as well. Covers slightly different topics, including how to get your data OK with `vbindiff`.
-- The `#resources` channel on the Discord contains many more links on specific details of decompiling IDO MIPS code.
 
 ## Getting Started
 
@@ -45,9 +44,7 @@ You should be able to build a matching ROM before you start making any changes.
 Usually, the best place to get started is to decompile an actor overlay.
 An *actor* is any thing in the game that moves or performs actions or interactions. This includes things like Link, enemies, NPCs, doors, pots, etc. Actors are good for a first file because they are generally small, self-contained systems.
 
-We recommend that you [join the Discord](https://discord.zelda.deco.mp/) to say hello and get suggestions on where to start on the `#mm-decomp` channel.
-
-We track who is working on what on some Google Sheets available in the Discord. Once you've decided on or been recommended a good first file, mark it as Reserved.
+We track who is working on what on some Google Sheets. Once you've decided on or been recommended a good first file, mark it as Reserved.
 
 The workflow is:
 
@@ -58,7 +55,7 @@ The workflow is:
 
 The expectation is that one reservation goes to one file which ends up in a one file PR, although naturally some files are more sensibly worked on as a group, for example two actors that work together. This also does not apply to large asset files like `gameplay_keep`: you can just reserve the parts that are used in your files.
 
-If possible, we expect reserved files to be completed. If you find you cannot complete a file, because it is intractable for one reason or another, or real-life circumstances get in the way, please talk to one of the leads in Discord; we may find someone else interested in helping you finish, or who is happy to take over the file from you completely. If you unreserve a file on which you have useful progress, please leave a link to your branch in the Notes column on the Google Sheet that the next person who works on the file can use.
+If possible, we expect reserved files to be completed. If you find you cannot complete a file, because it is intractable for one reason or another, or real-life circumstances get in the way, please talk to one of the leads; we may find someone else interested in helping you finish, or who is happy to take over the file from you completely. If you unreserve a file on which you have useful progress, please leave a link to your branch in the Notes column on the Google Sheet that the next person who works on the file can use.
 
 ## Style Guide & Conventions
 
@@ -82,7 +79,7 @@ void CollisionCheck_SpawnWaterDroplets(PlayState* play, Vec3f* v);
 Before PRing with a `NON_MATCHING`, you can try
 
 - using the [decomp-permuter](https://github.com/simonlindholm/decomp-permuter) to find a closer match,
-- Asking in `#mm-decomp-help` in Discord; the easiest way to allow other people to play around with the function you are stuck on is to make a scratch on [decomp.me](http://decomp.me).
+- Making a scratch on [decomp.me](http://decomp.me): the easiest way to allow other people to play around with the function you are stuck on.
 
 `NON_EQUIVALENT` can be used with the same syntax as `NON_MATCHING`, but it is used to mark sections of code which do not match *and* do not have the same behavior as the original code.
 
@@ -116,7 +113,6 @@ Before opening a PR, walk through the following steps to ensure that your code c
 - New variables & functions should follow standard naming conventions.
 - Comments and variables have correct spelling.
 
-Feel free to reach out on the Discord if you have any questions about these steps or encounter any issues.
 
 ### Pull Request Process
 
@@ -130,11 +126,11 @@ make clean
 make
 ```
 
-locally. If the build is `OK`, the next thing to check is that all added/modified files were `git add`-ed to your commit. The final check before posting on Discord for help is that there are no new warnings added to the code causing Jenkins to fail. You can check this by running: `tools/warnings_count/check_new_warnings.sh`.
+locally. If the build is `OK`, the next thing to check is that all added/modified files were `git add`-ed to your commit. The final check before asking for help is that there are no new warnings added to the code causing Jenkins to fail. You can check this by running: `tools/warnings_count/check_new_warnings.sh`.
 
 Each PR needs a review from two reviewers, at least one a project lead, and final approval from Kenix.
 
-If the PR author agrees with a reviewer's suggestion, they make the change and resolve the conversation. If they disagree, have a better idea, or want to comment on something, they should at least leave a comment, and discuss it in Discord if it's not going to be resolved quickly, since long conversations on GitHub are hard to read.
+If the PR author agrees with a reviewer's suggestion, they make the change and resolve the conversation. If they disagree, have a better idea, or want to comment on something, they should at least leave a comment, and keep the discussion short if it's not going to be resolved quickly, since long conversations on GitHub are hard to read.
 
 Once all comments is addressed and all reviewers have approved, the PR will be merged.
 

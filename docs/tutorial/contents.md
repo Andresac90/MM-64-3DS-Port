@@ -8,7 +8,7 @@
 ## Pre-decompilation
 
 - [Introduction to git](intro_to_git.md)
-- Building the repo (follow the instructions in the [README.md](../../README.md))
+- Building the repo (follow the instructions in the [README](../DECOMP_README.md))
 - Most of us use VSCode. Some useful information is [here](vscode.md).
 <!-- Feel free to document Emacs/Vi/Sublime/whatever if you're familiar with them -->
 - Choosing a first actor (You want something small that has simple interactions with the environment. A simple NPC can also work, and is what we will use as an illustration for most of the tutorial. There is a collection of actors we think are suitable for beginners on the spreadsheet or Trello)

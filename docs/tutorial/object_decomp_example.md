@@ -91,7 +91,7 @@ Now that we have the skeleton figured out, it's time to name all the animations.
 
 - Try viewing the animation in game. In what contexts does this animation play?
 - Try analyzing the code for the actor to see when the animation is used. Is this animation ever referenced?
-- If you're still really struggling, Majora's Mask 3D contains the original animation names for the majority of animations in the game. These original names can help you figure out what the developers were originally intending. Explaining how to find these animations in MM3D is outside of the scope of this document, so just ask in Discord if you want to try this.
+- If you're still really struggling, Majora's Mask 3D contains the original animation names for the majority of animations in the game. These original names can help you figure out what the developers were originally intending. Explaining how to find these animations in MM3D is outside of the scope of this document.
 
 After naming the animations, the end result will look something like this:
 

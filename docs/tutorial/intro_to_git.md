@@ -396,7 +396,6 @@ Note the blank line and the `<>` around the email. More information on precisely
 This guide has only covered the basics that are required to work with git on a decomp repository. For more information
 
 - Run a command with `--help`
-- Ask in Discord
 - consult a reference such as https://git-scm.com/docs or https://www.atlassian.com/git/tutorials
 
 *Always ask or research before doing anything drastic, git is sophisticated enough that usually it has a way to resolve problems itself*

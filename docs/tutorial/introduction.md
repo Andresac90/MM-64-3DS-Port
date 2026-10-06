@@ -57,7 +57,7 @@ N.B. We are using only publicly available code. In particular, we are not lookin
 
 Progress of the project can be found at [https://zelda.deco.mp]. The long-term goal of this project is to obtain a complete compilable version of the code for every publicly released version of Majora's Mask (in the same way as the Ocarina of Time project and many other Zelda games). *We are not working on a PC Port, and neither this project nor the ZeldaRET organisation will not be making one*, although the resulting code will be very useful if someone does intend to make such a port.
 
-Most of the discussion on the project takes place on the Zelda Decompilation Discord (linked in the [README.md](../../README.md)). We are very welcoming to newcomers and are happy to help you with any problems you might have with the decompilation process.
+Questions about the decompilation itself go to [zeldaret/mm](https://github.com/zeldaret/mm).
 
 ## What do I need to know to take part?
 

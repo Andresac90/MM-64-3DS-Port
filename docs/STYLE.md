@@ -206,7 +206,7 @@ This section mostly applies to actors.
 
 ### Functions
 
-All functions should go in the main C file in the same order as the assembly (the latter is required to match anyway). (We may make exceptions for particularly large files with a particular organisational structure, but we ask that you check on Discord first before doing this)
+All functions should go in the main C file in the same order as the assembly (the latter is required to match anyway). (We may make exceptions for particularly large files with a particular organisational structure, but we ask that you check first before doing this)
 
 ### Data
 
@@ -246,4 +246,4 @@ Are covered in the [ZAPD extraction xml spec](../tools/ZAPD/docs/zapd_extraction
 
 *All of the above is subservient to matching.* Sometimes IDO cares about newlines, for example.
 
-If you are not sure about any of the above, please ask in Discord.
+If you are not sure about any of the above, please ask.
