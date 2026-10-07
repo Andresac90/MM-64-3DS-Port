@@ -1033,10 +1033,21 @@ void AnimTaskQueue_AddLoadPlayerFrame(PlayState* play, PlayerAnimationHeader* an
 
         osCreateMesgQueue(&task->data.loadPlayerFrame.msgQueue, task->data.loadPlayerFrame.msg,
                           ARRAY_COUNT(task->data.loadPlayerFrame.msg));
+#ifdef __3DS__
+        // PORT (the OoT 3DS port's fix): linkAnimSegment is a native pointer to the natively compiled link_animetion
+        // frame data, not a segment offset - LINK_ANIMETION_OFFSET would compute a garbage ROM address (exploded Link).
+        // Copy the frame from the native data.
+        {
+            size_t frameSize = sizeof(Vec3s) * limbCount + sizeof(s16);
+            bcopy((u8*)playerAnimHeader->linkAnimSegment + frameSize * frame, frameTable, frameSize);
+            osSendMesg(&task->data.loadPlayerFrame.msgQueue, NULL, OS_MESG_NOBLOCK);
+        }
+#else
         DmaMgr_RequestAsync(
             &task->data.loadPlayerFrame.req, frameTable,
             LINK_ANIMETION_OFFSET(playerAnimHeader->linkAnimSegment, (sizeof(Vec3s) * limbCount + sizeof(s16)) * frame),
             sizeof(Vec3s) * limbCount + sizeof(s16), 0, &task->data.loadPlayerFrame.msgQueue, NULL);
+#endif
     }
 }
 

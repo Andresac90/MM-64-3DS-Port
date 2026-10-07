@@ -111,6 +111,19 @@ void SysCfb_Init(void) {
         sCfbHiRes0 = gHiBuffer.framebufferHiRes;
     } while ((u64)0);
 
+#ifdef __3DS__
+    // PORT: the renderer uses the framebuffers with GPU operations (screen copies, readbacks), and the GPU only
+    // reaches the 3DS linear heap - not the program's .bss where gLoBuffer/gHiBuffer are (Azahar: "Read from unknown
+    // GPU address"). The OoT port allocates them there too (its syscfb_shim.c).
+    {
+        extern void* linearAlloc(size_t size);
+        sCfbLoRes1 = linearAlloc(sizeof(gLoBuffer.framebuffer));
+        sCfbLoRes0 = linearAlloc(sizeof(gHiBuffer.framebuffer));
+        sCfbHiRes1 = linearAlloc(sizeof(gLoBuffer.framebufferHiRes));
+        sCfbHiRes0 = linearAlloc(sizeof(gHiBuffer.framebufferHiRes));
+    }
+#endif
+
     SysCfb_SetLoResMode();
 }
 

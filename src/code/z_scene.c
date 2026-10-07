@@ -202,6 +202,14 @@ void Scene_CommandCollisionHeader(PlayState* play, SceneCmd* cmd) {
     colHeader = colHeaderTemp;
     colHeader->vtxList = Lib_SegmentedToVirtual(colHeaderTemp->vtxList);
     colHeader->polyList = Lib_SegmentedToVirtual(colHeader->polyList);
+#ifdef PORT_LOG_SYNC // PORT (bring-up): the scene collision as the game sees it
+    { extern void PortDbgX(const char* label, unsigned val);
+      PortDbgX("[col] header", (unsigned)(uintptr_t)colHeader); PortDbgX("  numVertices", colHeader->numVertices);
+      PortDbgX("  vtxList", (unsigned)(uintptr_t)colHeader->vtxList); PortDbgX("  numPolygons", colHeader->numPolygons);
+      PortDbgX("  polyList", (unsigned)(uintptr_t)colHeader->polyList);
+      PortDbgX("  min x", (unsigned)(s32)colHeader->minBounds.x); PortDbgX("  max x", (unsigned)(s32)colHeader->maxBounds.x);
+      PortDbgX("  cmd segment", (unsigned)(uintptr_t)cmd->colHeader.segment); }
+#endif
 
     if (colHeader->surfaceTypeList != NULL) {
         colHeader->surfaceTypeList = Lib_SegmentedToVirtual(colHeader->surfaceTypeList);

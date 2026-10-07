@@ -12,11 +12,23 @@
 #define OS_CYCLES_TO_NSEC(c)    (((u64)(c)*(1000000000LL/15625000LL))/(OS_CPU_COUNTER/15625000LL))
 #define OS_CYCLES_TO_USEC(c)    (((u64)(c)*(1000000LL/15625LL))/(OS_CPU_COUNTER/15625LL))
 
+/* PORT (after the OoT 3DS port's guard): 3DS pointers are real addresses - adding K0BASE to one gave a bit-31 address
+ * that faults (Azahar: "Read from unknown GPU address", via its Luma alias). The game's "physical" addresses are
+ * native pointers here (K0_TO_PHYSICAL leaves them unchanged), including the program's own data below 0x10000000
+ * (native assets at 0x001xxxxx-0x03xxxxxx, the app heap at 0x08xxxxxx), so the way back is the identity. */
+#ifdef __3DS__
+#define OS_K0_TO_PHYSICAL(x)    ((u32)(x) >= 0x80000000u ? (u32)((char*)(x)-0x80000000) : (u32)(x))
+#define OS_K1_TO_PHYSICAL(x)    ((u32)(x) >= 0xA0000000u ? (u32)((char*)(x)-0xA0000000) : (u32)(x))
+
+#define OS_PHYSICAL_TO_K0(x)    ((void*)(u32)(x))
+#define OS_PHYSICAL_TO_K1(x)    ((void*)(u32)(x))
+#else
 #define OS_K0_TO_PHYSICAL(x)    (u32)(((char*)(x)-0x80000000))
 #define OS_K1_TO_PHYSICAL(x)    (u32)(((char*)(x)-0xA0000000))
 
 #define OS_PHYSICAL_TO_K0(x)    (void*)(((u32)(x)+0x80000000))
 #define OS_PHYSICAL_TO_K1(x)    (void*)(((u32)(x)+0xA0000000))
+#endif
 
 /* Functions */
 

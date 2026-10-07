@@ -55,6 +55,17 @@ typedef struct {
 } SCmdRoomList; // size = 0x8
 
 typedef struct {
+#ifdef __3DS__
+    /* PORT: bytes 4-7 are one CMD_BBBB word (a<<24|b<<16|c<<8|d); on the little-endian 3DS they sit reversed
+     * (the OoT 3DS port's fix, include/scene.h there) */
+    u8  code;
+    u8  data1;
+    UNK_TYPE1 pad2[2];
+    u8  clothIntensity;
+    s8  south;
+    s8  vertical;
+    s8  west;
+#else
     /* 0x0 */ u8  code;
     /* 0x1 */ u8  data1;
     /* 0x2 */ UNK_TYPE1 pad2[2];
@@ -62,6 +73,7 @@ typedef struct {
     /* 0x5 */ s8  vertical;
     /* 0x6 */ s8  south;
     /* 0x7 */ u8  clothIntensity;
+#endif
 } SCmdWindSettings; // size = 0x8
 
 typedef struct {
@@ -119,29 +131,64 @@ typedef struct {
 } SCmdLightSettingList; // size = 0x8
 
 typedef struct {
+#ifdef __3DS__
+    /* PORT: bytes 4-7 are one CMD_BBBB word (a<<24|b<<16|c<<8|d); on the little-endian 3DS they sit reversed
+     * (the OoT 3DS port's fix, include/scene.h there) */
+    u8  code;
+    u8  data1;
+    UNK_TYPE1 pad2[2];
+    UNK_TYPE1 pad4;
+    u8  timeSpeed;
+    u8  min;
+    u8  hour;
+#else
     /* 0x0 */ u8  code;
     /* 0x1 */ u8  data1;
     /* 0x2 */ UNK_TYPE1 pad2[2];
     /* 0x4 */ u8  hour;
     /* 0x5 */ u8  min;
     /* 0x6 */ u8  timeSpeed;
+#endif
 } SCmdTimeSettings; // size = 0x7
 
 typedef struct {
+#ifdef __3DS__
+    /* PORT: bytes 4-7 are one CMD_BBBB word (a<<24|b<<16|c<<8|d); on the little-endian 3DS they sit reversed
+     * (the OoT 3DS port's fix, include/scene.h there) */
+    u8  code;
+    u8  data1;
+    UNK_TYPE1 pad2[2];
+    UNK_TYPE1 pad4;
+    u8  envLightMode;
+    u8  skyboxConfig;
+    u8  skyboxId;
+#else
     /* 0x0 */ u8  code;
     /* 0x1 */ u8  data1;
     /* 0x2 */ UNK_TYPE1 pad2[2];
     /* 0x4 */ u8  skyboxId;
     /* 0x5 */ u8  skyboxConfig;
     /* 0x6 */ u8  envLightMode;
+#endif
 } SCmdSkyboxSettings; // size = 0x7
 
 typedef struct {
+#ifdef __3DS__
+    /* PORT: bytes 4-7 are one CMD_BBBB word (a<<24|b<<16|c<<8|d); on the little-endian 3DS they sit reversed
+     * (the OoT 3DS port's fix, include/scene.h there) */
+    u8  code;
+    u8  data1;
+    UNK_TYPE1 pad2[2];
+    UNK_TYPE1 pad4[2];
+    u8  unk5;
+    u8  unk4;
+#else
     /* 0x0 */ u8  code;
     /* 0x1 */ u8  data1;
     /* 0x2 */ UNK_TYPE1 pad2[2];
     /* 0x4 */ u8  unk4;
     /* 0x5 */ u8  unk5;
+#endif
 } SCmdSkyboxDisables; // size = 0x6
 
 typedef struct {
@@ -157,18 +204,39 @@ typedef struct {
 } SCmdEndMarker; // size = 0x8
 
 typedef struct {
+#ifdef __3DS__
+    /* PORT: bytes 4-7 are one CMD_BBBB word (a<<24|b<<16|c<<8|d); on the little-endian 3DS they sit reversed
+     * (the OoT 3DS port's fix, include/scene.h there) */
+    u8  code;
+    u8  specId;
+    UNK_TYPE1 unk_02[2];
+    u8  seqId;
+    u8  ambienceId;
+    UNK_TYPE1 unk_06[2];
+#else
     /* 0x0 */ u8  code;
     /* 0x1 */ u8  specId;
     /* 0x2 */ UNK_TYPE1 unk_02[4];
     /* 0x6 */ u8  ambienceId;
     /* 0x7 */ u8  seqId;
+#endif
 } SCmdSoundSettings; // size = 0x8
 
 typedef struct {
+#ifdef __3DS__
+    /* PORT: bytes 4-7 are one CMD_BBBB word (a<<24|b<<16|c<<8|d); on the little-endian 3DS they sit reversed
+     * (the OoT 3DS port's fix, include/scene.h there) */
+    u8  code;
+    u8  data1;
+    UNK_TYPE1 unk_02[2];
+    u8  echo;
+    UNK_TYPE1 unk_05[3];
+#else
     /* 0x0 */ u8  code;
     /* 0x1 */ u8  data1;
     /* 0x2 */ UNK_TYPE1 unk_02[5];
     /* 0x7 */ u8  echo;
+#endif
 } SCmdEchoSettings; // size = 0x8
 
 typedef struct {

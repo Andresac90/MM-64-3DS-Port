@@ -195,11 +195,17 @@ void EffectSs_Spawn(PlayState* play, s32 type, s32 priority, void* initData) {
                          overlayEntry->vramEnd, overlayEntry->loadedRamAddr);
         }
 
+#ifdef __3DS__
+        // PORT (the OoT 3DS port's fix): overlays are linked into the program, so the profile is a real pointer; the
+        // N64 vram->ram relocation (vramStart is an N64 address) gave a bit-31 pointer
+        profile = overlayEntry->profile;
+#else
         profile = (void*)(uintptr_t)((overlayEntry->profile != NULL)
                                          ? (void*)((uintptr_t)overlayEntry->profile -
                                                    (intptr_t)((uintptr_t)overlayEntry->vramStart -
                                                               (uintptr_t)overlayEntry->loadedRamAddr))
                                          : NULL);
+#endif
     }
 
     if (profile->init == NULL) {

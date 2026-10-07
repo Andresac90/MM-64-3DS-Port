@@ -1063,6 +1063,7 @@ static unsigned short Port3ds_TouchUiPoll(void) {
 
 
 s8 gPortCamX, gPortCamY;     /* C-stick camera input for this update (z_camera.c) */
+int gPortMenuInput;          /* > 0 while a menu is up (set each update by the game: file select, pause) */
 static void Port3ds_PollInput(void) {
     hidScanInput();
     u32 k = hidKeysHeld();
@@ -1083,10 +1084,17 @@ static void Port3ds_PollInput(void) {
     if (k & KEY_R)      b |= BTN_R_;
     if (k & KEY_ZL)     b |= BTN_CDOWN_;
     /* ZR: the BOOTS pad (Port3ds_TouchUiPoll); C-up stays on VIEW and D-pad up */
-    if (k & KEY_DUP)    b |= BTN_CUP_;
-    if (k & KEY_DDOWN)  b |= BTN_CDOWN_;
-    if (k & KEY_DLEFT)  b |= BTN_CLEFT_;
-    if (k & KEY_DRIGHT) b |= BTN_CRIGHT_;
+    /* PORT (2026-10-06, asked for): in menus (file select, the pause screens, the Bombers' Notebook:
+     * gPortMenuInput, set by the game each update) the D-pad moves like the stick, as menus are navigated on the
+     * N64; it presses no C button there. In gameplay, dialogue and ocarina playing it stays the C buttons. */
+    int menu = gPortMenuInput > 0;
+    if (gPortMenuInput > 0) gPortMenuInput--;
+    if (!menu) {
+        if (k & KEY_DUP)    b |= BTN_CUP_;
+        if (k & KEY_DDOWN)  b |= BTN_CDOWN_;
+        if (k & KEY_DLEFT)  b |= BTN_CLEFT_;
+        if (k & KEY_DRIGHT) b |= BTN_CRIGHT_;
+    }
     /* C-stick (New 3DS): turns the camera (z_camera.c Camera_Normal1) - PORT (2026-10-03), asked for on
      * hardware; settings cstick=0 makes it the four C buttons again (they are on Y/X/ZL/ZR/D-pad too) */
     gPortCamX = gPortCamY = 0;
@@ -1114,6 +1122,12 @@ static void Port3ds_PollInput(void) {
     /* circle pad range ~ +-156; scale to N64 +-80 */
     s3dsStickX = (signed char)(cp.dx * 80 / 156);
     s3dsStickY = (signed char)(cp.dy * 80 / 156);
+    if (menu) { /* the D-pad as a full stick tilt (the circle pad still works) */
+        if (k & KEY_DLEFT)  s3dsStickX = -80;
+        if (k & KEY_DRIGHT) s3dsStickX = 80;
+        if (k & KEY_DUP)    s3dsStickY = 80;
+        if (k & KEY_DDOWN)  s3dsStickY = -80;
+    }
     s3dsButtons = b;
 }
 
@@ -1762,6 +1776,13 @@ static void Port3ds_RenderThreadStart(void) {
 
 void PortGfx_RunTask(OSTask* task) {
     u64 tA = svcGetSystemTick(), tC, tD;
+#ifdef PORT_MM_NODRAW /* (bring-up: run the game without drawing, to isolate GPU faults) */
+    { extern void PortDbgX(const char* label, unsigned val); static unsigned sN; if (sN++ < 3) PortDbgX("[nodraw] frame", sN); }
+    return;
+#endif
+#ifdef PORT_LOG_SYNC
+    { extern void PortDbgX(const char* label, unsigned val); static unsigned sF; if (sF < 40) PortDbgX("[gfx] frame", ++sF); }
+#endif
     PROF_SET(PROF_INPUT);
     if (sPerfLastEnd != 0) sPerfGame += tA - sPerfLastEnd;
     Port3ds_RenderWaitIdle(); /* one update in flight (render thread) */
@@ -2450,6 +2471,19 @@ int main(int argc, char** argv) {
     }
 
     Log("DMA init OK.");
+    { /* PORT MM (bring-up): physical addresses of the main regions, to place GPU address errors */
+      extern char port_seg_gameplay_keep[], __end__[]; extern int gLoBuffer;
+      void* h = malloc(16); void* l = linearAlloc(16);
+      PortDbgX("phys .data asset (gameplay_keep)", (unsigned)osConvertVirtToPhys(port_seg_gameplay_keep));
+      PortDbgX("  virt", (unsigned)(uintptr_t)port_seg_gameplay_keep);
+      PortDbgX("phys .bss (gLoBuffer)", (unsigned)osConvertVirtToPhys(&gLoBuffer));
+      PortDbgX("phys image end", (unsigned)osConvertVirtToPhys(__end__));
+      PortDbgX("phys app heap", (unsigned)osConvertVirtToPhys(h)); PortDbgX("  virt", (unsigned)(uintptr_t)h);
+      PortDbgX("phys linear", (unsigned)osConvertVirtToPhys(l)); PortDbgX("  virt", (unsigned)(uintptr_t)l);
+      { extern u32 __ctru_linear_heap, __ctru_linear_heap_size;
+        PortDbgX("linear heap virt", (unsigned)__ctru_linear_heap); PortDbgX("linear heap size", (unsigned)__ctru_linear_heap_size);
+        PortDbgX("linear space free", (unsigned)linearSpaceFree()); }
+      free(h); linearFree(l); }
     /* PORT (2026-09-24): bootproc() normally calls Locale_Init (cart header -> gCurrentRegion,
      * which SaveContext_Init turns into the save language). The port enters Main() directly,
      * so region stayed 0 and the US ROM showed Japanese text. Run it here, after the ROM opens. */
@@ -2457,9 +2491,18 @@ int main(int argc, char** argv) {
 
     gViConfigModeType = 0;
 
+#ifdef PORT_LOG_SYNC
+    PortDbgX("fb top", (unsigned)(uintptr_t)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL));
+    PortDbgX("fb bottom", (unsigned)(uintptr_t)gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL));
+#endif
     Log("calling Main() (engine init)...");
     Main(0);
     Log("Main() returned; entering graph loop.");
+#ifdef PORT_LOG_SYNC
+    PortDbgX("after Main: fb top", (unsigned)(uintptr_t)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL));
+    PortDbgX("after Main: fb bottom", (unsigned)(uintptr_t)gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL));
+    PortDbgX("after Main: linear free", (unsigned)linearSpaceFree());
+#endif
 
     /* Audio isn't initialized on 3DS (audio thread never runs), so the SFX bank
      * link-lists are garbage and any Audio_StopSfxById/etc. walk spins forever.
@@ -2485,7 +2528,9 @@ int main(int argc, char** argv) {
 #endif
 
     Port3ds_TouchUiInit(); /* boot finished: the bottom screen becomes the control panel */
+#ifndef PORT_LOG_SYNC /* (debug: PORT_EXTRA=-DPORT_LOG_SYNC keeps every line written at once, for crash hunting) */
     Log_StartAsync();      /* from here on the SD card is written by a background thread */
+#endif
     {
         /* PORT PERF (2026-10-04): the Old 3DS layout. Its second core (1) is shared with the system, which gives an
          * application only the share granted by APT_SetAppCpuTimeLimit. Measured on hardware at Old 3DS speed: the game

@@ -1061,6 +1061,12 @@ void Play_UpdateMain(PlayState* this) {
 }
 
 void Play_Update(PlayState* this) {
+#ifdef __3DS__
+    if (IS_PAUSED(&this->pauseCtx) || this->pauseCtx.bombersNotebookOpen) {
+        extern int gPortMenuInput;
+        gPortMenuInput = 2; // PORT: in menus the D-pad navigates like the stick (port/src/3ds_main.c)
+    }
+#endif
     if (!sBombersNotebookOpen) {
         if (this->pauseCtx.bombersNotebookOpen) {
             sBombersNotebookOpen = true;

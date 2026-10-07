@@ -757,6 +757,18 @@ static void gfx_citro3d_upload_texture(uint8_t *rgba32_buf, int width, int heigh
     }
     else
     {
+        /* PORT (MM bring-up): the same bound as the branch above. Unchecked, a power-of-two texture over 16K texels
+         * (MM: larger images than OoT's) overran sTexBuf and corrupted the statics after it - texture records the
+         * GPU then read garbage addresses from (Azahar: "Read from unknown GPU address"). */
+        if (width * height * 4 > (int)sizeof(sTexBuf)) {
+            static int sLogged;
+            if (sLogged++ < 4) {
+                extern void PortDbgX(const char* label, unsigned val);
+                PortDbgX("[gfx] texture too large for sTexBuf: w", width);
+                PortDbgX("  h", height);
+            }
+            return;
+        }
         sTexturePoolScaleS[sCurTex] = 1.f;
         sTexturePoolScaleT[sCurTex] = 1.f;
         performTexSwizzle(rgba32_buf, sTexBuf, width, height);
@@ -772,6 +784,18 @@ static void gfx_citro3d_upload_texture(uint8_t *rgba32_buf, int width, int heigh
     if (sTexturePool[sCurTex].data == NULL) {
         C3D_TexInit(&sTexturePool[sCurTex], width, height, GPU_RGBA8);
     }
+#ifdef PORT_TEX_DEBUG /* (debug: textures that are large, failed, or end past the linear heap) */
+    {
+        extern u32 __ctru_linear_heap, __ctru_linear_heap_size;
+        uintptr_t d = (uintptr_t)sTexturePool[sCurTex].data;
+        uintptr_t end = d + (uintptr_t)width * height * 4;
+        if (d == 0 || width * height > 256 * 256 || end > __ctru_linear_heap + __ctru_linear_heap_size) {
+            extern void PortDbgX(const char* label, unsigned val);
+            PortDbgX("[texdbg] tex w", width); PortDbgX("  h", height); PortDbgX("  data", (unsigned)d);
+            PortDbgX("  slot", sCurTex);
+        }
+    }
+#endif
     C3D_TexUpload(&sTexturePool[sCurTex], sTexBuf);
     C3D_TexFlush(&sTexturePool[sCurTex]);
     {
@@ -1536,6 +1560,11 @@ static void gfx_citro3d_init(void)
     // Create the VBO (vertex buffer object)
     sVboBuffer = linearAlloc(VBO_BYTES);
     sIdxBuf = linearAlloc(IDX_CAP * sizeof(u16));
+#ifdef PORT_TEX_DEBUG
+    { extern void PortDbgX(const char* label, unsigned val);
+      PortDbgX("[texdbg] idx buf", (unsigned)(uintptr_t)sIdxBuf); PortDbgX("  vbo", (unsigned)(uintptr_t)sVboBuffer);
+      PortDbgX("  raw vbo", (unsigned)(uintptr_t)sRawVbo); }
+#endif
     gfx_citro3d_setup_mode(gPortGpuVtx != 0);
     rawInit();
     C3D_DepthMap(true, -1.0f, 0);

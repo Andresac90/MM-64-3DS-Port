@@ -2298,6 +2298,12 @@ s16 D_808147C8[] = { 90, 90, 86 };
 
 void FileSelect_Main(GameState* thisx) {
     FileSelectState* this = (FileSelectState*)thisx;
+#ifdef __3DS__
+    {
+        extern int gPortMenuInput;
+        gPortMenuInput = 2; // PORT: in menus the D-pad navigates like the stick (port/src/3ds_main.c)
+    }
+#endif
     Input* input = CONTROLLER1(&this->state);
     s32 texIndex;
     s32 pad;

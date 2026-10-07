@@ -34,7 +34,14 @@ the SD card. The 3DS platform layer in `port/` started as a copy of the OoT port
          system heap's size (`main.c`); linked overlays are never freed (`z_DLF.c`).
    - [x] Big-endian reads: Yaz0 header (`yaz0.c`), archive offset table (`sys_cmpdma.c`).
    - [x] Engine init, game states up to `Play_Init` run (audio off: `PORT_MM_AUDIO`, see phase 3).
-   - [ ] Azahar stops on "Read from unknown GPU address": a buffer outside GPU memory reaches the GPU.
+   - [x] "Read from unknown GPU address" (Azahar): a CPU read of a bit-31 address, i.e. an overlay function pointer
+         relocated N64-style (vramStart is an N64 address). Overlays are linked in place: no relocation in
+         `z_actor.c`, `z_effect_soft_sprite.c`, `z_fbdemo_dlftbls.c`, `z_overlay.c` (the OoT port's fix).
+   - [x] Also: `OS_PHYSICAL_TO_K0` identity (`os_convert.h`), the 6 byte-packed scene commands in 3DS byte order
+         (`z64scene.h`), Link's animation frames read from native data (`z_skelanime.c`), framebuffers in GPU memory,
+         D-pad as the stick in menus.
+   - [x] **Gameplay runs in Azahar (58 fps): the HUD and the touch panel draw.**
+   - [ ] The 3D world draws black (renderer: point lighting, fog, MM's display lists).
 3. **MM-specific systems**
    - Audio: synthesis reads/writes unmapped memory in Azahar (fatal on hardware); OoT's audio patches to redo for MM.
    - Archive textures (item icons, pause pages) are big-endian ROM data: the renderer must read them as such.
@@ -43,7 +50,7 @@ the SD card. The 3DS platform layer in `port/` started as a copy of the OoT port
    - `kanread.s` (assembly) → the OoT port's C version (`port/src/kanread_port.c`).
    - Memory: MM needs the N64 Expansion Pak (8 MB); arena sizes on the 3DS.
    - Touch screen: MM's items, masks, Bombers' Notebook, map, the three-day clock.
-4. **Title screen, then gameplay** → the README's first 3DS screenshot (`tools/make_showcase.py` from the OoT port).
+4. **Title screen, then gameplay** (gameplay state reached; title/file select not yet seen) → the README's first 3DS screenshot (`tools/make_showcase.py` from the OoT port).
 5. Audio, 60 fps (interpolation), stereoscopic 3D, Old 3DS, hardware tests — as in the OoT port.
 
 ## Rules (same as the OoT port)

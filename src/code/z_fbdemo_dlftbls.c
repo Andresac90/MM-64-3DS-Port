@@ -43,7 +43,11 @@ void Transition_Init(TransitionContext* transitionCtx) {
     overlayEntry = &gTransitionOverlayTable[transitionCtx->fbdemoType];
     TransitionOverlay_Load(overlayEntry);
 
+#ifdef __3DS__
+    relocOffset = 0; // PORT: the transition overlays are linked into the program (no vram->ram relocation)
+#else
     relocOffset = (uintptr_t)Lib_PhysicalToVirtual(overlayEntry->loadInfo.addr) - (uintptr_t)overlayEntry->vramStart;
+#endif
     profile[0] = NULL;
     profile[0] = (overlayEntry->profile != NULL) ? (TransitionProfile*)((uintptr_t)overlayEntry->profile + relocOffset)
                                                  : profile[0];

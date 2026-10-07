@@ -11,6 +11,9 @@
 #include "zelda_arena.h"
 
 void* TransitionOverlay_VramToRam(TransitionOverlay* overlayEntry, void* vramAddr) {
+#ifdef __3DS__
+    return vramAddr; // PORT: the transition overlays are linked into the program (no vram->ram relocation)
+#endif
     void* loadedRamAddr = Lib_PhysicalToVirtual(overlayEntry->loadInfo.addr);
 
     if ((loadedRamAddr != NULL) && (vramAddr >= overlayEntry->vramStart) && (vramAddr < overlayEntry->vramEnd)) {
